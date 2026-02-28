@@ -282,6 +282,9 @@ usort($campaigns, function($a, $b) use ($state_order) {
     .btn-quick-add:hover { background: #e0e0f0; border-color: #999; }
     .btn-action { padding:7px 18px; margin-left:10px; cursor:pointer; }
     .row-selector { width: 18px; height: 18px; cursor: pointer; }
+    /* Стиль для нового селектора */
+    .filter-label { margin-left: 20px; font-weight: bold; font-size: 0.95em; }
+    .filter-select { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
@@ -291,9 +294,18 @@ usort($campaigns, function($a, $b) use ($state_order) {
         <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">В кабинет Яндекс.Директ</a>
         <a href="javascript:history.back()" class="get-btn">Назад</a>
     </div>
-    <div style="margin:32px 0; display:flex; align-items:center;">
-        <input type="text" id="searchInput" class="budget-search" placeholder="Поиск..." style="padding:6px 10px; font-size:1em; width:220px;">
-        <button onclick="budgetSearch()" style="padding:7px 18px; margin-left:5px;">Найти</button>
+    <div style="margin:32px 0; display:flex; align-items:center; flex-wrap: wrap; gap: 10px;">
+        <input type="text" id="searchInput" class="budget-search" placeholder="Поиск по имени..." style="padding:6px 10px; font-size:1em; width:200px;">
+        
+        <label class="filter-label">Показать:</label>
+        <select id="statusFilter" class="filter-select" onchange="budgetSearch()">
+            <option value="all">Все кампании</option>
+            <option value="active_only">Только активные</option>
+            <option value="hide_archived">Скрыть архивные</option>
+            <option value="hide_stopped">Скрыть остановленные</option>
+        </select>
+
+        <button onclick="budgetSearch()" style="padding:7px 18px;">Найти</button>
         <button onclick="distributeRemainingBudget()" class="btn-action" style="background:#fdf; border:1px solid #c9c;" title="Выровнять остаток дней у всех выбранных">Распределить поровну</button>
         <button onclick="transferRemainingBudget()" class="btn-action" style="background:#dfe; border:1px solid #9c9;" title="Перенести остаток с остановленных/приостановленных на активные">Перенести остаток 🔄</button>
     </div>
@@ -331,7 +343,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         $lim_val = isset($budgets[$cid]) ? $budgets[$cid] : '';
         $is_archived = ($state === 'ARCHIVED') ? 1 : 0;
 
-        // Общий расход (1.22)
+        // Общий расход (Коэффициент 1.22)
         $spent = 0;
         if (isset($camp['Funds'])) {
             if (isset($camp['Funds']['SharedAccountFunds']['Spend'])) {
@@ -389,7 +401,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         if ($week_limit !== null) {
             echo '<span style="'.($manual_limit_set ? 'color:#da8706;font-weight:bold;' : '').'">' . number_format($week_limit, 0, ',', ' ') . ' ₽ / ' . number_format($day_limit, 0, ',', ' ') . ' ₽' . ($manual_limit_set ? ' <span title="Введено вручную">*</span> <a href="#" onclick="editWeekLimit(\''.$cid.'\', '.$week_limit.'); return false;" style="margin-left:5px;">✎</a>' : '') . '</span>';
         } else {
-            echo '<input type="number" min="1" style="width:95px;" placeholder="Неделя"> <button onclick="saveWeekLimit(\''.$cid.'\', this)">OK</button>';
+            echo '<input type="number" min="1" style="width:95px;" placeholder="Лимит/неделя"> <button onclick="saveWeekLimit(\''.$cid.'\', this)">OK</button>';
         }
         echo '</td>';
         echo '<td class="cell-lim"><div style="font-weight:bold; font-size:1.15em; margin-bottom:3px;">'.($lim_val !== '' ? number_format($lim_val, 0, ',', ' ') : '-').'</div><form method="post" style="display:flex;align-items:center;margin:0;" id="form_lim_'.$cid.'"><input name="save_limit" style="width:70px;text-align:right;"><input type="hidden" name="cid" value="'.$cid.'"><button type="submit" style="margin-left:2px;cursor:pointer;">💾</button><div style="display:flex; gap:2px; margin-left:5px;">';
@@ -412,7 +424,29 @@ usort($campaigns, function($a, $b) use ($state_order) {
 var jsData = <?php echo json_encode($jsData, JSON_UNESCAPED_UNICODE); ?>;
 var daysSortOrder = 'asc';
 
-// --- ОБНОВЛЕННАЯ ФУНКЦИЯ: Перенос остатка с остановленных/приостановленных (оранжевых) на запущенные ---
+// --- Функция фильтрации и поиска ---
+function budgetSearch() {
+    var val = document.getElementById('searchInput').value.toLowerCase();
+    var filter = document.getElementById('statusFilter').value;
+    var rows = document.querySelectorAll('.data-campaign-row');
+    
+    rows.forEach(function(tr) {
+        var name = tr.querySelector('td:nth-child(2)').innerText.toLowerCase();
+        var state = tr.getAttribute('data-state');
+        
+        var matchesSearch = (!val || name.indexOf(val) !== -1);
+        var matchesFilter = true;
+        
+        if (filter === 'active_only') matchesFilter = (state === 'ON');
+        else if (filter === 'hide_archived') matchesFilter = (state !== 'ARCHIVED');
+        else if (filter === 'hide_stopped') matchesFilter = (state !== 'OFF');
+        
+        tr.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
+    });
+    updateTotals();
+}
+
+// --- Перенос остатка с остановленных/приостановленных на активные ---
 function transferRemainingBudget() {
     var rows = document.querySelectorAll('.data-campaign-row');
     var selectedActive = [];
@@ -431,7 +465,6 @@ function transferRemainingBudget() {
             var limit = parseFloat(data.lim_val) || 0;
             var remainder = Math.max(0, limit - spent);
 
-            // Оранжевые (SUSPENDED) и Красные (OFF)
             if (state === 'OFF' || state === 'SUSPENDED') {
                 transferPool += remainder;
                 selectedStopped.push({cid: data.cid, spent: spent});
@@ -445,7 +478,7 @@ function transferRemainingBudget() {
         }
     });
 
-    if (selectedStopped.length === 0) return alert("Выберите хотя бы одну остановленную (OFF) или приостановленную (оранжевую) кампанию!");
+    if (selectedStopped.length === 0) return alert("Выберите хотя бы одну остановленную (OFF) или оранжевую кампанию!");
     if (selectedActive.length === 0) return alert("Выберите активные (ON) кампании с дневным лимитом!");
 
     var totalToDistribute = activeRemainder + transferPool;
@@ -551,16 +584,6 @@ function saveWeekLimit(campaignId, btn) {
 
 function editWeekLimit(campaignId, current) {
     document.getElementById('week_limit_cell_' + campaignId).innerHTML = '<input type="number" value="'+current+'" style="width:95px;"> <button onclick="saveWeekLimit(\''+campaignId+'\', this)">OK</button>';
-}
-
-function budgetSearch() {
-    var val = document.getElementById('searchInput').value.toLowerCase();
-    var rows = document.querySelectorAll('.data-campaign-row');
-    rows.forEach(tr => {
-        var name = tr.querySelector('td:nth-child(2)').innerText.toLowerCase();
-        tr.style.display = (!val || name.indexOf(val) !== -1) ? '' : 'none';
-    });
-    updateTotals();
 }
 
 document.getElementById('searchInput').addEventListener('keyup', e => { if (e.key === 'Enter') budgetSearch(); });
