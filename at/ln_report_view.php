@@ -35,7 +35,23 @@ if (!file_exists($stop_file)) file_put_contents($stop_file, "[]");
 $stop_by_budgets = json_decode(file_get_contents($stop_file), true);
 if (!is_array($stop_by_budgets)) $stop_by_budgets = [];
 
-// --- POST: сохранение лимитов ---
+// --- POST: Массовое сохранение лимитов ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_limits'])) {
+    $data = json_decode($_POST['bulk_save_limits'], true);
+    if (is_array($data)) {
+        foreach ($data as $cid => $val) {
+            $budgets[$cid] = intval($val);
+        }
+        file_put_contents($budgets_file, json_encode($budgets, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['success' => false]);
+    }
+    exit;
+}
+
+// --- POST: сохранение лимита ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_limit'], $_POST['cid'])) {
     $cid = $_POST['cid'];
     $val = intval($_POST['save_limit']);
@@ -264,7 +280,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
     .sort-header:hover { color: #000; }
     .btn-quick-add { margin-left: 4px; padding: 2px 6px; font-size: 0.85em; cursor: pointer; background: #f0f0f5; border: 1px solid #ccc; border-radius: 3px; color: #333; }
     .btn-quick-add:hover { background: #e0e0f0; border-color: #999; }
-    /* Стиль для чекбоксов */
+    .btn-action { padding:7px 18px; margin-left:10px; cursor:pointer; }
     .row-selector { width: 18px; height: 18px; cursor: pointer; }
     </style>
 </head>
@@ -272,12 +288,13 @@ usort($campaigns, function($a, $b) use ($state_order) {
     <div class="top-row">
         <h2>Отчет по клиенту: <?=htmlspecialchars($clientName)?> (<?=htmlspecialchars($clientLogin)?>)</h2>
         <a href="ln_report.php" class="get-btn">← К списку клиентов</a>
-        <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">В кабинет Директ</a>
+        <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">В кабинет Яндекс.Директ</a>
         <a href="javascript:history.back()" class="get-btn">Назад</a>
     </div>
     <div style="margin:32px 0;">
         <input type="text" id="searchInput" class="budget-search" placeholder="Поиск по имени кампании..." style="padding:6px 10px; font-size:1em; width:260px;">
         <button onclick="budgetSearch()" style="padding:7px 18px;">Найти</button>
+        <button onclick="distributeRemainingBudget()" class="btn-action" style="background:#fdf; border:1px solid #c9c;" title="Выровнять остаток дней у выбранных кампаний">Распределить остаток</button>
     </div>
     <table class="budget-table" id="budgets-table">
         <thead>
@@ -309,7 +326,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         }
     }
 
-    foreach ($campaigns as $camp) {
+    foreach ($campaigns as $i => $camp) {
         $state = strtoupper($camp['State']);
         $cid = $camp['Id'];
         $lim_val = isset($budgets[$cid]) ? $budgets[$cid] : '';
@@ -367,10 +384,17 @@ usort($campaigns, function($a, $b) use ($state_order) {
         $row_class = ($state === 'ARCHIVED') ? 'archived-campaign' : '';
         $cost = isset($spend_today[$cid]) ? $spend_today[$cid] : 0;
 
-        $jsData[] = ['cid' => $cid, 'cost' => $cost, 'spent' => $spentNoVAT, 'week_limit' => ($week_limit !== null) ? $week_limit : '', 'day_limit' => ($day_limit !== null) ? $day_limit : '', 'lim_val' => ($lim_val !== '') ? $lim_val : ''];
+        // Сохраняем данные для JS (важно: Spent и Day_limit должны быть числами)
+        $jsData[] = [
+            'cid' => $cid, 
+            'cost' => $cost, 
+            'spent' => $spentNoVAT, 
+            'week_limit' => ($week_limit !== null) ? $week_limit : '', 
+            'day_limit' => ($day_limit !== null) ? $day_limit : 0, 
+            'lim_val' => ($lim_val !== '') ? $lim_val : 0
+        ];
 
-        echo '<tr class="' . $row_class . ' data-campaign-row" data-days="'.$sort_val.'" data-archived="'.$is_archived.'">';
-        // Новая ячейка с чекбоксом
+        echo '<tr class="' . $row_class . ' data-campaign-row" data-days="'.$sort_val.'" data-archived="'.$is_archived.'" data-idx="'.$i.'">';
         echo '<td><input type="checkbox" class="row-selector" onchange="updateTotals()"></td>';
         echo '<td style="padding-left:10px;"><a href="https://direct.yandex.ru/dna/campaigns-edit?ulogin=' . urlencode($clientLogin) . '&campaigns-ids=' . urlencode($cid) . '" target="_blank" style="color:#7b288f; text-decoration:underline;">' . htmlspecialchars($camp['Name']) . '</a></td>';
 
@@ -432,11 +456,54 @@ usort($campaigns, function($a, $b) use ($state_order) {
 var jsData = <?php echo json_encode($jsData, JSON_UNESCAPED_UNICODE); ?>;
 var daysSortOrder = 'asc';
 
-// --- Функция выделения всех строк ---
+// --- Распределение остатка бюджета ---
+function distributeRemainingBudget() {
+    var rows = document.querySelectorAll('.data-campaign-row');
+    var selected = [];
+    var totalRemainder = 0;
+    var totalDailyLimit = 0;
+
+    rows.forEach(function(tr) {
+        if (tr.style.display !== 'none' && tr.querySelector('.row-selector').checked) {
+            var idx = parseInt(tr.getAttribute('data-idx'));
+            var data = jsData[idx];
+            var daily = parseFloat(data.day_limit) || 0;
+            var spent = parseFloat(data.spent) || 0;
+            var limit = parseFloat(data.lim_val) || 0;
+            var remainder = Math.max(0, limit - spent);
+
+            if (daily > 0) {
+                totalRemainder += remainder;
+                totalDailyLimit += daily;
+                selected.push({cid: data.cid, spent: spent, daily: daily});
+            }
+        }
+    });
+
+    if (selected.length === 0) return alert("Выберите кампании с заданным дневным лимитом!");
+    if (totalDailyLimit === 0) return alert("Суммарный дневной лимит равен нулю!");
+
+    var targetDays = totalRemainder / totalDailyLimit;
+    if (!confirm("Общий остаток бюджета: " + Math.round(totalRemainder) + " ₽\nБудет распределено на " + targetDays.toFixed(1) + " дн. для каждой кампании.\nПродолжить?")) return;
+
+    var bulkData = {};
+    selected.forEach(function(item) {
+        bulkData[item.cid] = Math.round(item.spent + (targetDays * item.daily));
+    });
+
+    fetch('', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'bulk_save_limits=' + encodeURIComponent(JSON.stringify(bulkData))
+    }).then(r => r.json()).then(res => {
+        if (res.success) location.reload(); else alert("Ошибка при сохранении!");
+    });
+}
+
 function toggleAllRows(master) {
     var rows = document.querySelectorAll('.data-campaign-row');
     rows.forEach(function(tr) {
-        if (tr.style.display !== 'none') { // Выделяем только видимые при поиске
+        if (tr.style.display !== 'none') {
             var checkbox = tr.querySelector('.row-selector');
             if (checkbox) checkbox.checked = master.checked;
         }
@@ -444,7 +511,6 @@ function toggleAllRows(master) {
     updateTotals();
 }
 
-// --- Кнопка быстрого добавления бюджета (+30 дней) ---
 function quickAddBudget(cid, daily, currentTotal) {
     var newVal = Math.round(currentTotal + (daily * 30));
     var form = document.getElementById('form_lim_' + cid);
@@ -453,25 +519,20 @@ function quickAddBudget(cid, daily, currentTotal) {
     form.submit();
 }
 
-// --- Кнопки произвольного изменения (+ и -) ---
 function quickAdjustLimit(cid, action, currentTotal) {
     var amount = prompt(action === 'add' ? "Сколько добавить к общему лимиту?" : "Сколько отнять от общего лимита?");
     if (amount === null || amount === "" || isNaN(amount)) return;
-    
     amount = parseFloat(amount);
     var newVal = (action === 'add') ? (currentTotal + amount) : (currentTotal - amount);
-    
     var form = document.getElementById('form_lim_' + cid);
     var input = form.querySelector('input[name="save_limit"]');
     input.value = Math.round(newVal);
     form.submit();
 }
 
-// --- Функция умной сортировки ---
 function sortByDays() {
     const tbody = document.getElementById('table-body');
     const rows = Array.from(tbody.querySelectorAll('tr.data-campaign-row'));
-
     rows.sort((a, b) => {
         const archA = parseInt(a.getAttribute('data-archived'));
         const archB = parseInt(b.getAttribute('data-archived'));
@@ -480,7 +541,6 @@ function sortByDays() {
         const valB = parseInt(b.getAttribute('data-days'));
         return daysSortOrder === 'asc' ? valA - valB : valB - valA;
     });
-
     daysSortOrder = (daysSortOrder === 'asc') ? 'desc' : 'asc';
     rows.forEach(row => tbody.appendChild(row));
 }
@@ -496,7 +556,7 @@ function saveWeekLimit(campaignId, btn) {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'campaign_id=' + encodeURIComponent(campaignId) + '&week_limit=' + encodeURIComponent(val)
     }).then(r => r.json()).then(res => {
-        if (res.success) { location.reload(); } else { alert('Ошибка'); btn.disabled = false; }
+        if (res.success) location.reload(); else { alert('Ошибка'); btn.disabled = false; }
     });
 }
 
@@ -509,7 +569,7 @@ function budgetSearch() {
     var val = document.getElementById('searchInput').value.toLowerCase();
     var rows = document.querySelectorAll('.data-campaign-row');
     rows.forEach(function(tr) {
-        var nameCell = tr.querySelector('td:nth-child(2)'); // Теперь имя во 2-й колонке
+        var nameCell = tr.querySelector('td:nth-child(2)');
         if (!nameCell) return;
         var name = nameCell.innerText.toLowerCase();
         tr.style.display = (!val || name.indexOf(val) !== -1) ? '' : 'none';
@@ -520,24 +580,22 @@ function budgetSearch() {
 document.getElementById('searchInput').addEventListener('keyup', function(e){ if (e.key === 'Enter') budgetSearch(); });
 window.addEventListener('DOMContentLoaded', updateTotals);
 
-// --- ОБНОВЛЕННАЯ ФУНКЦИЯ ИТОГОВ: только для выделенных строк ---
 function updateTotals() {
     var rows = document.querySelectorAll('.data-campaign-row');
     var t_cost = 0, t_spent = 0, t_week = 0, t_day = 0, t_lim = 0;
     var c_week = 0, c_day = 0, c_lim = 0;
 
-    rows.forEach(function(tr, idx){
-        // Считаем только если строка видима И выделена чекбоксом
+    rows.forEach(function(tr){
         var isVisible = (tr.style.display !== 'none');
         var isChecked = tr.querySelector('.row-selector').checked;
-        
         if (isVisible && isChecked) {
+            var idx = parseInt(tr.getAttribute('data-idx'));
             var data = jsData[idx];
             t_cost += parseFloat(data.cost) || 0;
             t_spent += parseFloat(data.spent) || 0;
             if (data.week_limit !== '') { t_week += parseInt(data.week_limit); c_week++; }
-            if (data.day_limit !== '') { t_day += parseInt(data.day_limit); c_day++; }
-            if (data.lim_val !== '') { t_lim += parseInt(data.lim_val); c_lim++; }
+            if (data.day_limit > 0) { t_day += parseInt(data.day_limit); c_day++; }
+            if (data.lim_val > 0) { t_lim += parseInt(data.lim_val); c_lim++; }
         }
     });
 
