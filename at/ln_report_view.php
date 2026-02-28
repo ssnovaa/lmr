@@ -262,15 +262,15 @@ usort($campaigns, function($a, $b) use ($state_order) {
     .total-row { font-weight: bold; background: #f8f8fb; }
     .sort-header { cursor: pointer; color: #7b288f; text-decoration: underline; }
     .sort-header:hover { color: #000; }
-    .btn-quick-add { margin-left: 8px; padding: 2px 6px; font-size: 0.85em; cursor: pointer; background: #eef; border: 1px solid #ccd; border-radius: 3px; color: #333; }
-    .btn-quick-add:hover { background: #dde; }
+    .btn-quick-add { margin-left: 4px; padding: 2px 6px; font-size: 0.85em; cursor: pointer; background: #f0f0f5; border: 1px solid #ccc; border-radius: 3px; color: #333; }
+    .btn-quick-add:hover { background: #e0e0f0; border-color: #999; }
     </style>
 </head>
 <body>
     <div class="top-row">
         <h2>Отчет по клиенту: <?=htmlspecialchars($clientName)?> (<?=htmlspecialchars($clientLogin)?>)</h2>
         <a href="ln_report.php" class="get-btn">← К списку клиентов</a>
-        <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">В кабинет Яндекс.Директ</a>
+        <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">В кабинет Директ</a>
         <a href="javascript:history.back()" class="get-btn">Назад</a>
     </div>
     <div style="margin:32px 0;">
@@ -281,7 +281,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         <thead>
             <tr>
                 <th>Название кампании</th>
-                <th onclick="sortByDays()" class="sort-header" title="Нажмите для сортировки (Архивные всегда внизу)">Дней / Статус ↕️</th>
+                <th onclick="sortByDays()" class="sort-header" title="Нажмите для сортировки (Архив всегда внизу)">Дней / Статус ↕️</th>
                 <th>Расход за день</th>
                 <th>Общий расход</th>
                 <th>Лимит на неделю / день</th>
@@ -312,7 +312,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         $lim_val = isset($budgets[$cid]) ? $budgets[$cid] : '';
         $is_archived = ($state === 'ARCHIVED') ? 1 : 0;
 
-        // Общий расход (Коэффициент 1.22 для 22% НДС)
+        // Общий расход (Коэффициент 1.22 и копейки)
         $spent = 0;
         if (isset($camp['Funds'])) {
             if (isset($camp['Funds']['SharedAccountFunds']['Spend'])) {
@@ -324,7 +324,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         $spentRur = $spent / 1000000;
         $spentNoVAT = round($spentRur / 1.22, 2);
 
-        // --- Лимит на неделю / день ---
+        // --- Лимиты ---
         $week_limit = null;
         if (isset($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit']) && $camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] > 0) {
             $week_limit = floor($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] / 1000000);
@@ -400,13 +400,17 @@ usort($campaigns, function($a, $b) use ($state_order) {
                 <form method="post" style="display:flex;align-items:center;margin:0;" id="form_lim_'.$cid.'">
                     <input name="save_limit" value="" placeholder="Изменить..." style="width:70px;text-align:right;">
                     <input type="hidden" name="cid" value="' . htmlspecialchars($cid) . '">
-                    <button type="submit" title="Сохранить" style="margin-left:2px;cursor:pointer;">💾</button>';
+                    <button type="submit" title="Сохранить" style="margin-left:2px;cursor:pointer;">💾</button>
+                    <div style="display:flex; gap:2px; margin-left:5px;">';
         
         if ($day_limit > 0) {
             echo '<button type="button" class="btn-quick-add" onclick="quickAddBudget(\''.$cid.'\', '.$day_limit.', '.($lim_val ?: 0).')" title="Прибавить бюджет на 30 дней">+30</button>';
         }
         
-        echo '  </form>
+        echo '          <button type="button" class="btn-quick-add" onclick="quickAdjustLimit(\''.$cid.'\', \'add\', '.($lim_val ?: 0).')" title="Добавить свою сумму">+</button>
+                        <button type="button" class="btn-quick-add" onclick="quickAdjustLimit(\''.$cid.'\', \'sub\', '.($lim_val ?: 0).')" title="Отнять свою сумму">-</button>
+                    </div>
+                </form>
               </td>';
         echo '</tr>';
     }
@@ -431,6 +435,20 @@ function quickAddBudget(cid, daily, currentTotal) {
     var form = document.getElementById('form_lim_' + cid);
     var input = form.querySelector('input[name="save_limit"]');
     input.value = newVal;
+    form.submit();
+}
+
+// --- Кнопки произвольного изменения (+ и -) ---
+function quickAdjustLimit(cid, action, currentTotal) {
+    var amount = prompt(action === 'add' ? "Сколько добавить к общему лимиту?" : "Сколько отнять от общего лимита?");
+    if (amount === null || amount === "" || isNaN(amount)) return;
+    
+    amount = parseFloat(amount);
+    var newVal = (action === 'add') ? (currentTotal + amount) : (currentTotal - amount);
+    
+    var form = document.getElementById('form_lim_' + cid);
+    var input = form.querySelector('input[name="save_limit"]');
+    input.value = Math.round(newVal);
     form.submit();
 }
 
