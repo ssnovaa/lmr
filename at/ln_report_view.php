@@ -241,7 +241,7 @@ $all_ids = get_all_campaigns_ids($access_token, $clientLogin);
 $campaigns = get_campaigns_details_by_ids($access_token, $clientLogin, $all_ids);
 $spend_today = get_campaigns_daily_spend($access_token, $clientLogin, $all_ids);
 
-// -------- Сортируем кампании по статусу ---------
+// -------- Сортируем кампании по статусу по умолчанию ---------
 $state_order = ['ON'=>0, 'OFF'=>1, 'SUSPENDED'=>2, 'ARCHIVED'=>3];
 usort($campaigns, function($a, $b) use ($state_order) {
     $sa = strtoupper($a['State'] ?? '');
@@ -262,13 +262,15 @@ usort($campaigns, function($a, $b) use ($state_order) {
     .total-row { font-weight: bold; background: #f8f8fb; }
     .sort-header { cursor: pointer; color: #7b288f; text-decoration: underline; }
     .sort-header:hover { color: #000; }
+    .btn-quick-add { margin-left: 8px; padding: 2px 6px; font-size: 0.85em; cursor: pointer; background: #eef; border: 1px solid #ccd; border-radius: 3px; color: #333; }
+    .btn-quick-add:hover { background: #dde; }
     </style>
 </head>
 <body>
     <div class="top-row">
         <h2>Отчет по клиенту: <?=htmlspecialchars($clientName)?> (<?=htmlspecialchars($clientLogin)?>)</h2>
         <a href="ln_report.php" class="get-btn">← К списку клиентов</a>
-        <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">Кабинет Директ</a>
+        <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">В кабинет Яндекс.Директ</a>
         <a href="javascript:history.back()" class="get-btn">Назад</a>
     </div>
     <div style="margin:32px 0;">
@@ -310,7 +312,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         $lim_val = isset($budgets[$cid]) ? $budgets[$cid] : '';
         $is_archived = ($state === 'ARCHIVED') ? 1 : 0;
 
-        // Общий расход (Коэффициент 1.22)
+        // Общий расход (Коэффициент 1.22 для 22% НДС)
         $spent = 0;
         if (isset($camp['Funds'])) {
             if (isset($camp['Funds']['SharedAccountFunds']['Spend'])) {
@@ -320,10 +322,9 @@ usort($campaigns, function($a, $b) use ($state_order) {
             }
         }
         $spentRur = $spent / 1000000;
-        // Налог 22% и копейки
         $spentNoVAT = round($spentRur / 1.22, 2);
 
-        // --- Лимиты ---
+        // --- Лимит на неделю / день ---
         $week_limit = null;
         if (isset($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit']) && $camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] > 0) {
             $week_limit = floor($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] / 1000000);
@@ -394,7 +395,19 @@ usort($campaigns, function($a, $b) use ($state_order) {
         }
         echo '</td>';
 
-        echo '<td class="cell-lim"><div style="font-weight:bold; font-size:1.15em; margin-bottom:3px;">' . ($lim_val !== '' ? htmlspecialchars($lim_val) : '-') . '</div><form method="post" style="display:flex;align-items:center;margin:0;"><input name="save_limit" value="" placeholder="Лимит..." style="width:70px;text-align:right;"><input type="hidden" name="cid" value="' . htmlspecialchars($cid) . '"><button type="submit" title="Сохранить" style="margin-left:2px;cursor:pointer;">💾</button></form></td>';
+        echo '<td class="cell-lim">
+                <div style="font-weight:bold; font-size:1.15em; margin-bottom:3px;">' . ($lim_val !== '' ? number_format($lim_val, 0, ',', ' ') : '-') . '</div>
+                <form method="post" style="display:flex;align-items:center;margin:0;" id="form_lim_'.$cid.'">
+                    <input name="save_limit" value="" placeholder="Изменить..." style="width:70px;text-align:right;">
+                    <input type="hidden" name="cid" value="' . htmlspecialchars($cid) . '">
+                    <button type="submit" title="Сохранить" style="margin-left:2px;cursor:pointer;">💾</button>';
+        
+        if ($day_limit > 0) {
+            echo '<button type="button" class="btn-quick-add" onclick="quickAddBudget(\''.$cid.'\', '.$day_limit.', '.($lim_val ?: 0).')" title="Прибавить бюджет на 30 дней">+30</button>';
+        }
+        
+        echo '  </form>
+              </td>';
         echo '</tr>';
     }
     file_put_contents($stop_file, json_encode(array_keys($updated_stop_by_budgets), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
@@ -412,7 +425,16 @@ usort($campaigns, function($a, $b) use ($state_order) {
 var jsData = <?php echo json_encode($jsData, JSON_UNESCAPED_UNICODE); ?>;
 var daysSortOrder = 'asc';
 
-// --- Функция умной сортировки с приоритетом живых кампаний ---
+// --- Кнопка быстрого добавления бюджета (+30 дней) ---
+function quickAddBudget(cid, daily, currentTotal) {
+    var newVal = Math.round(currentTotal + (daily * 30));
+    var form = document.getElementById('form_lim_' + cid);
+    var input = form.querySelector('input[name="save_limit"]');
+    input.value = newVal;
+    form.submit();
+}
+
+// --- Функция умной сортировки (Архивные всегда внизу) ---
 function sortByDays() {
     const tbody = document.getElementById('table-body');
     const rows = Array.from(tbody.querySelectorAll('tr.data-campaign-row'));
@@ -421,8 +443,7 @@ function sortByDays() {
         const archA = parseInt(a.getAttribute('data-archived'));
         const archB = parseInt(b.getAttribute('data-archived'));
 
-        // Архивные всегда в самом низу (0 выше чем 1)
-        if (archA !== archB) return archA - archB;
+        if (archA !== archB) return archA - archB; // Живые (0) выше архивных (1)
 
         const valA = parseInt(a.getAttribute('data-days'));
         const valB = parseInt(b.getAttribute('data-days'));
