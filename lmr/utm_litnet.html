@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>UTM-генератор (только метки)</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 40px; line-height: 1.5; }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 12px; }
+    label { display: block; margin: 16px 0 6px; font-weight: 600; }
+    input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 10px; font-size: 14px; }
+    .row { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+    button { padding: 10px 14px; border: 0; border-radius: 10px; cursor: pointer; font-weight: 600; background: #111827; color: white; }
+    button.secondary { background: #e5e7eb; color: #111827; }
+    .out { margin-top: 16px; }
+    .msg { margin-top: 10px; color: #b91c1c; font-size: 13px; min-height: 18px; }
+    .small { font-size: 12px; color: #666; }
+    .ok { color: #065f46; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>UTM-генератор для Litnet (только метки)</h1>
+
+    <label for="in">Ссылка на книгу или слаг ()</label>
+    <input id="in" type="text" placeholder="Вставьте ссылку на Litnet или слаг" value="" />
+
+    <div class="row">
+      <button id="gen">Сгенерировать</button>
+      <button id="copy" class="secondary" disabled>Скопировать метки</button>
+      <span id="status" class="small" aria-live="polite"></span>
+    </div>
+
+    <div class="out">
+      <label for="out">UTM-метки (без "?")</label>
+      <input id="out" type="text" readonly placeholder="utm_source=...&utm_medium=...&utm_campaign=..."/>
+      <div id="msg" class="msg" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <script>
+    // Получаем слаг либо из URL, либо напрямую из введённой строки
+    function getSlug(input) {
+      const s = input.trim();
+      if (!s) return null;
+
+      // 1) Если это полноценный URL — парсим
+      try {
+        const u = new URL(s);
+        const parts = u.pathname.split('/').filter(Boolean);
+        const i = parts.findIndex(p => p === 'book');
+        if (i !== -1 && i + 1 < parts.length) {
+          const slug = parts[i + 1];
+          if (slug && !/\s|\/|\\/.test(slug)) return slug;
+        }
+      } catch (_) {
+        // не URL — идём дальше
+      }
+
+      // 2) Если пользователь ввёл голый слаг типа: name-b123456
+      const slugLike = /^[-a-z0-9]+-b\d+$/i.test(s);
+      if (slugLike) return s;
+
+      // 3) Вариант без протокола:
+      if (/^litnet\.com\//i.test(s)) {
+        try {
+          const u = new URL('https://' + s);
+          const parts = u.pathname.split('/').filter(Boolean);
+          const i = parts.findIndex(p => p === 'book');
+          if (i !== -1 && i + 1 < parts.length) {
+            const slug = parts[i + 1];
+            if (slug && !/\s|\/|\\/.test(slug)) return slug;
+          }
+        } catch {}
+      }
+
+      return null;
+    }
+
+    // Собираем только строку UTM-параметров (без '?')
+    function buildUtmParams(slug) {
+      const utm_source = 'vk_ads';
+      const utm_medium = 'cpc';
+      const utm_campaign = `all-device_all-os_all_vkads_cpc_book_${slug}_rocket-le01`;
+      // Важно: не добавляем '?' — только сами метки
+      return `utm_source=${encodeURIComponent(utm_source)}&utm_medium=${encodeURIComponent(utm_medium)}&utm_campaign=${encodeURIComponent(utm_campaign)}`;
+    }
+
+    const $in = document.getElementById('in');
+    const $out = document.getElementById('out');
+    const $gen = document.getElementById('gen');
+    const $copy = document.getElementById('copy');
+    const $msg = document.getElementById('msg');
+    const $status = document.getElementById('status');
+
+    function generate() {
+      $msg.textContent = '';
+      $status.textContent = '';
+      $out.value = '';
+      $copy.disabled = true;
+
+      const slug = getSlug($in.value);
+      if (!slug) {
+        $msg.textContent = 'Введите корректную ссылку на Litnet или слаг ';
+        return;
+      }
+
+      const params = buildUtmParams(slug);
+      $out.value = params;
+      $copy.disabled = false;
+      $status.textContent = 'Готово';
+      $status.className = 'small ok';
+    }
+
+    $gen.addEventListener('click', generate);
+    $in.addEventListener('keydown', (e) => { if (e.key === 'Enter') generate(); });
+
+    $copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($out.value);
+        $status.textContent = 'Метки скопированы';
+        $status.className = 'small ok';
+      } catch {
+        $status.textContent = 'Не удалось скопировать — выделите и скопируйте вручную';
+        $status.className = 'small';
+        $out.select();
+      }
+    });
+  </script>
+</body>
+</html>

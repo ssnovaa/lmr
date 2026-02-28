@@ -1,0 +1,422 @@
+[
+    {
+        "id": 307414439,
+        "login": "e-17478064",
+        "name": "1030 Сластин Артем",
+        "manual_name": null,
+        "active_campaigns": 6
+    },
+    {
+        "id": 315022849,
+        "login": "porg-dgarcisu",
+        "name": "e-20190558",
+        "manual_name": "0014 Смородинский",
+        "active_campaigns": 4
+    },
+    {
+        "id": 105182890,
+        "login": "e-17348970",
+        "name": "0302 Алексеев",
+        "manual_name": null,
+        "active_campaigns": 2
+    },
+    {
+        "id": 105118163,
+        "login": "e-17347832",
+        "name": "Имя Фамилия",
+        "manual_name": "0064 Жгулёв",
+        "active_campaigns": 2
+    },
+    {
+        "id": 110501614,
+        "login": "e-20054618",
+        "name": "1075 Ульянов Андрей",
+        "manual_name": null,
+        "active_campaigns": 2
+    },
+    {
+        "id": 307559033,
+        "login": "e-17479683",
+        "name": "1013 Поповский Андрей",
+        "manual_name": null,
+        "active_campaigns": 2
+    },
+    {
+        "id": 105182879,
+        "login": "e-17348965",
+        "name": "0507 Матисов",
+        "manual_name": null,
+        "active_campaigns": 1
+    },
+    {
+        "id": 315202883,
+        "login": "porg-a43aungm",
+        "name": "e-20192584",
+        "manual_name": "0597 Седых Александр",
+        "active_campaigns": 1
+    },
+    {
+        "id": 307268141,
+        "login": "e-17477174",
+        "name": "0092 Серебряков",
+        "manual_name": null,
+        "active_campaigns": 1
+    },
+    {
+        "id": 315005451,
+        "login": "porg-kjx47sgk",
+        "name": "e-20190342",
+        "manual_name": "0742 Боброва Екатерина",
+        "active_campaigns": 1
+    },
+    {
+        "id": 307717211,
+        "login": "e-17481099",
+        "name": "1023 Владыкин Александр",
+        "manual_name": null,
+        "active_campaigns": 1
+    },
+    {
+        "id": 321096813,
+        "login": "porg-ps54jli7",
+        "name": "e-20240486",
+        "manual_name": "0712 Григорьев Олл",
+        "active_campaigns": 1
+    },
+    {
+        "id": 320031985,
+        "login": "porg-q2okahxl",
+        "name": "e-20230783",
+        "manual_name": "0588 Коваль Кирилл",
+        "active_campaigns": 1
+    },
+    {
+        "id": 105715484,
+        "login": "e-17361001",
+        "name": "Имя Фамилия",
+        "manual_name": "гг",
+        "active_campaigns": 1
+    },
+    {
+        "id": 319507475,
+        "login": "porg-hsunid7t",
+        "name": "e-20226492",
+        "manual_name": "1148 Большаков Егор",
+        "active_campaigns": 1
+    },
+    {
+        "id": 319716105,
+        "login": "porg-vckoud36",
+        "name": "e-20228070",
+        "manual_name": "1149 Морская Алена",
+        "active_campaigns": 1
+    },
+    {
+        "id": 300290783,
+        "login": "e-17419225",
+        "name": "0986 Ковалева Катиш",
+        "manual_name": null,
+        "active_campaigns": 1
+    },
+    {
+        "id": 320776519,
+        "login": "porg-pqpyy3tv",
+        "name": "e-20237849",
+        "manual_name": "1154 Ан Игорь",
+        "active_campaigns": 1
+    },
+    {
+        "id": 105118245,
+        "login": "e-17347874",
+        "name": "Имя Фамилия",
+        "manual_name": "0069 Минин",
+        "active_campaigns": 1
+    },
+    {
+        "id": 314946217,
+        "login": "porg-6mesnvpz",
+        "name": "e-20189931",
+        "manual_name": "0976 Лева Bloodlust",
+        "active_campaigns": 0
+    },
+    {
+        "id": 321134297,
+        "login": "porg-xv5m4w5f",
+        "name": "e-20240785",
+        "manual_name": "1064 Федоренко Артем",
+        "active_campaigns": 0
+    },
+    {
+        "id": 315250801,
+        "login": "porg-h4ldy3bz",
+        "name": "e-20192974",
+        "manual_name": "0736 Данченко Данилов",
+        "active_campaigns": 0
+    },
+    {
+        "id": 315246225,
+        "login": "porg-bt6n5cua",
+        "name": "e-20192959",
+        "manual_name": "1122 Кон Алекс",
+        "active_campaigns": 0
+    },
+    {
+        "id": 303292305,
+        "login": "e-17444578",
+        "name": "1004 Панежин Евгений",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 315415463,
+        "login": "porg-ra7673wm",
+        "name": "e-20194562",
+        "manual_name": "0091 Иванов Абабков",
+        "active_campaigns": 0
+    },
+    {
+        "id": 316725717,
+        "login": "porg-26rlsjsm",
+        "name": "e-20205989",
+        "manual_name": "1107 Титов Александр",
+        "active_campaigns": 0
+    },
+    {
+        "id": 319971793,
+        "login": "porg-jsanqner",
+        "name": "e-20230336",
+        "manual_name": "0835 Щинов Бредвик",
+        "active_campaigns": 0
+    },
+    {
+        "id": 319802447,
+        "login": "porg-og2vxo7k",
+        "name": "e-20228828",
+        "manual_name": "1150 Аладинский Николай.",
+        "active_campaigns": 0
+    },
+    {
+        "id": 317611533,
+        "login": "porg-rohxo2bq",
+        "name": "e-20213401",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 105164428,
+        "login": "e-17348809",
+        "name": "0194 Мухин Владимир",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 319241457,
+        "login": "porg-5bl6gums",
+        "name": "e-20224148",
+        "manual_name": "1147 Кей Артем",
+        "active_campaigns": 0
+    },
+    {
+        "id": 110105598,
+        "login": "e-20044085",
+        "name": "Имя Фамилия",
+        "manual_name": "1078 Романов Дмитрий",
+        "active_campaigns": 0
+    },
+    {
+        "id": 110821242,
+        "login": "e-20063588",
+        "name": "1101 Емелин Максим",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 314816619,
+        "login": "porg-frkhrrug",
+        "name": "e-20188751",
+        "manual_name": "1135 Александров Ридд",
+        "active_campaigns": 0
+    },
+    {
+        "id": 105157447,
+        "login": "e-17348617",
+        "name": "0188 Стоев Андрей",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 105148318,
+        "login": "e-17348398",
+        "name": "0115 Ткачев",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 105820511,
+        "login": "e-17363836",
+        "name": "0260 Лей Влад",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 110821636,
+        "login": "e-20063812",
+        "name": "1102 Летун Инна",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 108919556,
+        "login": "e-20013297",
+        "name": "1068 Чайка Дмитрий",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 110800120,
+        "login": "e-20062642",
+        "name": "1098 Тролль Борис",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 110796581,
+        "login": "e-20061582",
+        "name": "1059 Снегирев Алексей",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 300755689,
+        "login": "e-17421678",
+        "name": "0680 Егоренков Виталий",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 306562161,
+        "login": "e-17472025",
+        "name": "0963 Шебалин Дмитрий",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 110821248,
+        "login": "e-20063591",
+        "name": "0956 Ильичев Евгений",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 110800014,
+        "login": "e-20062578",
+        "name": "0753 Иванов Izzi Genius",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 307245431,
+        "login": "e-17477039",
+        "name": "0958 Коровников Дмитрий",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 109856532,
+        "login": "e-20037454",
+        "name": "1080 Годман Teddy",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 314847051,
+        "login": "porg-xgxvgpzu",
+        "name": "e-20189010",
+        "manual_name": "1134 Семеновых Кайнес",
+        "active_campaigns": 0
+    },
+    {
+        "id": 311147959,
+        "login": "porg-d5tpfwbr",
+        "name": "e-20096611",
+        "manual_name": "1111 Сидоренко Котов",
+        "active_campaigns": 0
+    },
+    {
+        "id": 312379657,
+        "login": "porg-obrfop47",
+        "name": "e-20110477",
+        "manual_name": "1124 Аверьянов Евгений",
+        "active_campaigns": 0
+    },
+    {
+        "id": 108563448,
+        "login": "e-17411636",
+        "name": "0982 Жуковский",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 105475668,
+        "login": "e-17355263",
+        "name": "0627 Тартаров Радислав",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 313398539,
+        "login": "porg-whepgbla",
+        "name": "e-20124972",
+        "manual_name": "0479 Григорян Эрик",
+        "active_campaigns": 0
+    },
+    {
+        "id": 313396253,
+        "login": "porg-ikmtgyp4",
+        "name": "e-20124937",
+        "manual_name": "1125 Дубинина Marget",
+        "active_campaigns": 0
+    },
+    {
+        "id": 313458131,
+        "login": "porg-p7rmpvb5",
+        "name": "e-20125915",
+        "manual_name": "1127 Скрипун Дед",
+        "active_campaigns": 0
+    },
+    {
+        "id": 313588993,
+        "login": "porg-ekwralwv",
+        "name": "e-20127743",
+        "manual_name": "0483 Томо Люцело",
+        "active_campaigns": 0
+    },
+    {
+        "id": 314418579,
+        "login": "porg-5cpemy5k",
+        "name": "e-20184576",
+        "manual_name": "1131 Элэртис Дайбельтэрис",
+        "active_campaigns": 0
+    },
+    {
+        "id": 314531265,
+        "login": "porg-77f6lyjo",
+        "name": "e-20185884",
+        "manual_name": "1132 Строгов Вячеслав",
+        "active_campaigns": 0
+    },
+    {
+        "id": 309035077,
+        "login": "e-20003229",
+        "name": "1058 Грехов Тимофей",
+        "manual_name": null,
+        "active_campaigns": 0
+    },
+    {
+        "id": 314846769,
+        "login": "porg-46doga77",
+        "name": "e-20189007",
+        "manual_name": "1129 Романов Макс",
+        "active_campaigns": 0
+    }
+]
