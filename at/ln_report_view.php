@@ -34,6 +34,7 @@ $stop_file = __DIR__ . "/ln_stop_by_budgets.json";
 if (!file_exists($stop_file)) file_put_contents($stop_file, "[]");
 $stop_by_budgets = json_decode(file_get_contents($stop_file), true);
 if (!is_array($stop_by_budgets)) $stop_by_budgets = [];
+
 // --- POST: сохранение лимитов ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_limit'], $_POST['cid'])) {
     $cid = $_POST['cid'];
@@ -73,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_status'], $_PO
     header("Location: ".$_SERVER['REQUEST_URI']); exit;
 }
 
-// --- Функции такие же, как в budgets.php ---
+// --- Функции API Яндекс.Директа ---
 function change_campaign_status($access_token, $client_login, $campaign_id, $action) {
     $url = 'https://api.direct.yandex.com/json/v5/campaigns';
     $headers = [
@@ -98,6 +99,7 @@ function change_campaign_status($access_token, $client_login, $campaign_id, $act
     curl_exec($ch);
     curl_close($ch);
 }
+
 function get_all_campaigns_ids($access_token, $client_login) {
     $url = 'https://api.direct.yandex.com/json/v5/campaigns';
     $headers = [
@@ -131,6 +133,7 @@ function get_all_campaigns_ids($access_token, $client_login) {
     }
     return $ids;
 }
+
 function get_campaigns_daily_spend($access_token, $client_login, $ids) {
     if (empty($ids)) return [];
     $url = 'https://api.direct.yandex.com/json/v5/reports';
@@ -181,7 +184,7 @@ function get_campaigns_daily_spend($access_token, $client_login, $ids) {
         if (!$line) continue;
         if (strpos($line, "\t") === false) continue;
         list($cid, $cost) = explode("\t", $line);
-        $day_spent[$cid] = round((float)$cost);
+        $day_spent[$cid] = round((float)$cost, 2);
     }
     return $day_spent;
 }
@@ -255,20 +258,17 @@ usort($campaigns, function($a, $b) use ($state_order) {
     <title>Отчет по клиенту <?=htmlspecialchars($clientName)?> (<?=htmlspecialchars($clientLogin)?>)</title>
     <link rel="stylesheet" href="ln_report.css?v=1">
     <style>
-    .archived-campaign {
-        opacity: 0.5;
-    }
-    .total-row {
-        font-weight: bold;
-        background: #f8f8fb;
-    }
+    .archived-campaign { opacity: 0.5; }
+    .total-row { font-weight: bold; background: #f8f8fb; }
+    .sort-header { cursor: pointer; color: #7b288f; text-decoration: underline; }
+    .sort-header:hover { color: #000; }
     </style>
 </head>
 <body>
     <div class="top-row">
         <h2>Отчет по клиенту: <?=htmlspecialchars($clientName)?> (<?=htmlspecialchars($clientLogin)?>)</h2>
         <a href="ln_report.php" class="get-btn">← К списку клиентов</a>
-        <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">В кабинет Яндекс.Директ</a>
+        <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">Кабинет Директ</a>
         <a href="javascript:history.back()" class="get-btn">Назад</a>
     </div>
     <div style="margin:32px 0;">
@@ -276,38 +276,25 @@ usort($campaigns, function($a, $b) use ($state_order) {
         <button onclick="budgetSearch()" style="padding:7px 18px;">Найти</button>
     </div>
     <table class="budget-table" id="budgets-table">
-        <tr>
-            <th>Название кампании</th>
-            <th>Дней / Статус</th>
-            <th>Расход за день</th>
-            <th>Общий расход</th>
-            <th>Лимит на неделю / день</th>
-            <th>Общий лимит</th>
-        </tr>
+        <thead>
+            <tr>
+                <th>Название кампании</th>
+                <th onclick="sortByDays()" class="sort-header" title="Нажмите для сортировки (Архивные всегда внизу)">Дней / Статус ↕️</th>
+                <th>Расход за день</th>
+                <th>Общий расход</th>
+                <th>Лимит на неделю / день</th>
+                <th>Общий лимит</th>
+            </tr>
+        </thead>
+        <tbody id="table-body">
 <?php
-    // Для JS: массив с данными (одна строка на кампанию)
     $jsData = [];
-    // --- Загрузить старые кампании для ln_stop_by_budgets.json ---
     $all_stop_by_budgets = [];
     if (file_exists($stop_file)) {
         $all_stop_by_budgets = json_decode(file_get_contents($stop_file), true);
         if (!is_array($all_stop_by_budgets)) $all_stop_by_budgets = [];
     }
 
-    // Поддерживаем два возможных формата: либо массив ID, либо массив объектов с ключами id/name/login/days_left/date
-    $existing_ids = [];
-    if (isset($all_stop_by_budgets[0]) && is_array($all_stop_by_budgets[0])) {
-        foreach ($all_stop_by_budgets as $el) {
-            if (is_numeric($el)) $existing_ids[] = (int)$el;
-        }
-    } else {
-        foreach ($all_stop_by_budgets as $k => $el) {
-            if (is_array($el) && isset($el['id'])) $existing_ids[] = (int)$el['id'];
-            elseif (is_numeric($el)) $existing_ids[] = (int)$el;
-        }
-    }
-
-    // Соберём новый массив для записи
     $updated_stop_by_budgets = [];
     foreach ($all_stop_by_budgets as $key => $val) {
         if (is_array($val) && isset($val['id'])) {
@@ -321,40 +308,31 @@ usort($campaigns, function($a, $b) use ($state_order) {
         $state = strtoupper($camp['State']);
         $cid = $camp['Id'];
         $lim_val = isset($budgets[$cid]) ? $budgets[$cid] : '';
+        $is_archived = ($state === 'ARCHIVED') ? 1 : 0;
 
-        // Общий расход
+        // Общий расход (Коэффициент 1.22)
         $spent = 0;
-        if (
-            isset($camp['Funds']['Mode']) &&
-            $camp['Funds']['Mode'] === 'SHARED_ACCOUNT_FUNDS' &&
-            isset($camp['Funds']['SharedAccountFunds']['Spend'])
-        ) {
-            $spent = $camp['Funds']['SharedAccountFunds']['Spend'];
+        if (isset($camp['Funds'])) {
+            if (isset($camp['Funds']['SharedAccountFunds']['Spend'])) {
+                $spent = $camp['Funds']['SharedAccountFunds']['Spend'];
+            } elseif (isset($camp['Funds']['CampaignFunds']['Spend'])) {
+                $spent = $camp['Funds']['CampaignFunds']['Spend'];
+            }
         }
         $spentRur = $spent / 1000000;
-        $spentNoVAT = floor($spentRur / 1.2);
+        // Налог 22% и копейки
+        $spentNoVAT = round($spentRur / 1.22, 2);
 
-        // --- Лимит на неделю / день ---
+        // --- Лимиты ---
         $week_limit = null;
-        if (
-            isset($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit']) &&
-            $camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] > 0
-        ) {
+        if (isset($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit']) && $camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] > 0) {
             $week_limit = floor($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] / 1000000);
-        }
-        elseif (
-            isset($camp['TextCampaign']['BiddingStrategy']['Search']['WeeklySpendLimit']) &&
-            $camp['TextCampaign']['BiddingStrategy']['Search']['WeeklySpendLimit'] > 0
-        ) {
+        } elseif (isset($camp['TextCampaign']['BiddingStrategy']['Search']['WeeklySpendLimit']) && $camp['TextCampaign']['BiddingStrategy']['Search']['WeeklySpendLimit'] > 0) {
             $week_limit = floor($camp['TextCampaign']['BiddingStrategy']['Search']['WeeklySpendLimit'] / 1000000);
-        }
-        elseif (
-            isset($camp['Funds']['WeeklySpendLimit']) &&
-            $camp['Funds']['WeeklySpendLimit'] > 0
-        ) {
+        } elseif (isset($camp['Funds']['WeeklySpendLimit']) && $camp['Funds']['WeeklySpendLimit'] > 0) {
             $week_limit = floor($camp['Funds']['WeeklySpendLimit'] / 1000000);
         }
-        // === Ручной лимит если нет лимита в API
+
         $manual_limit_set = false;
         if ($week_limit === null && isset($manual_week_limits[$cid]) && $manual_week_limits[$cid] > 0) {
             $week_limit = intval($manual_week_limits[$cid]);
@@ -375,89 +353,55 @@ usort($campaigns, function($a, $b) use ($state_order) {
             $days_left = '-';
         }
 
-        // === Блок управления stop_by_budgets (дополнение, а не перезапись!) ===
+        // Значение для сортировки: если прочерк, ставим очень много дней
+        $sort_val = ($days_left === '-') ? 999999 : $days_left;
+
         if ($days_left !== '-' && $days_left <= 2) {
-            $updated_stop_by_budgets[$cid] = [
-                'id'     => $cid,
-                'name'   => $camp['Name'],
-                'login'  => $clientLogin,
-                'days_left' => $days_left,
-                'date'   => date('Y-m-d H:i:s')
-            ];
+            $updated_stop_by_budgets[$cid] = ['id' => $cid, 'name' => $camp['Name'], 'login' => $clientLogin, 'days_left' => $days_left, 'date' => date('Y-m-d H:i:s')];
         } elseif ($days_left !== '-' && $days_left > 3 && isset($updated_stop_by_budgets[$cid])) {
             unset($updated_stop_by_budgets[$cid]);
         }
 
         $row_class = ($state === 'ARCHIVED') ? 'archived-campaign' : '';
+        $cost = isset($spend_today[$cid]) ? $spend_today[$cid] : 0;
 
-        $jsData[] = [
-            'cid' => $cid,
-            'cost' => $cost = isset($spend_today[$camp['Id']]) ? $spend_today[$camp['Id']] : 0,
-            'spent' => $spentNoVAT,
-            'week_limit' => ($week_limit !== null) ? $week_limit : '',
-            'day_limit' => ($day_limit !== null) ? $day_limit : '',
-            'lim_val' => ($lim_val !== '') ? $lim_val : ''
-        ];
+        $jsData[] = ['cid' => $cid, 'cost' => $cost, 'spent' => $spentNoVAT, 'week_limit' => ($week_limit !== null) ? $week_limit : '', 'day_limit' => ($day_limit !== null) ? $day_limit : '', 'lim_val' => ($lim_val !== '') ? $lim_val : ''];
 
-        echo '<tr class="' . $row_class . ' data-campaign-row">';
-        echo '<td style="padding-left:18px;"><a href="https://direct.yandex.ru/dna/campaigns-edit?ulogin=' . urlencode($clientLogin) . '&campaigns-ids=' . urlencode($cid) . '" target="_blank" style="color:#7b288f; text-decoration:underline;">'
-            . htmlspecialchars($camp['Name']) . '</a></td>';
+        echo '<tr class="' . $row_class . ' data-campaign-row" data-days="'.$sort_val.'" data-archived="'.$is_archived.'">';
+        echo '<td style="padding-left:18px;"><a href="https://direct.yandex.ru/dna/campaigns-edit?ulogin=' . urlencode($clientLogin) . '&campaigns-ids=' . urlencode($cid) . '" target="_blank" style="color:#7b288f; text-decoration:underline;">' . htmlspecialchars($camp['Name']) . '</a></td>';
 
         echo '<td>' . $days_left . ' &nbsp; ' . state_icon($camp['State']) .
              ' <span style="color:#555; display:none">' . htmlspecialchars($camp['State']) . '</span>';
         if ($state === 'ON') {
-            echo '<form method="post" style="display:inline;margin-left:8px;">
-                <input type="hidden" name="cid" value="'.htmlspecialchars($cid).'">
-                <input type="hidden" name="login" value="'.htmlspecialchars($clientLogin).'">
-                <button name="change_status" value="suspend" title="Остановить" style="color:#bb2c2c;cursor:pointer;">⏸️</button>
-            </form>';
+            echo '<form method="post" style="display:inline;margin-left:8px;"><input type="hidden" name="cid" value="'.htmlspecialchars($cid).'"><input type="hidden" name="login" value="'.htmlspecialchars($clientLogin).'"><button name="change_status" value="suspend" title="Остановить" style="background:none; border:none; color:#bb2c2c; cursor:pointer;">⏸️</button></form>';
         } elseif ($state === 'OFF') {
-            echo '<form method="post" style="display:inline;margin-left:8px;">
-                <input type="hidden" name="cid" value="'.htmlspecialchars($cid).'">
-                <input type="hidden" name="login" value="'.htmlspecialchars($clientLogin).'">
-                <button name="change_status" value="resume" title="Включить" style="color:green;cursor:pointer;">▶️</button>
-            </form>';
+            echo '<form method="post" style="display:inline;margin-left:8px;"><input type="hidden" name="cid" value="'.htmlspecialchars($cid).'"><input type="hidden" name="login" value="'.htmlspecialchars($clientLogin).'"><button name="change_status" value="resume" title="Включить" style="background:none; border:none; color:green; cursor:pointer;">▶️</button></form>';
         }
         echo '</td>';
 
-        echo '<td class="cell-cost">' . $cost . '</td>';
-        echo '<td class="cell-spent">' . $spentNoVAT . '</td>';
+        echo '<td class="cell-cost">' . number_format($cost, 2, '.', ' ') . '</td>';
+        echo '<td class="cell-spent">' . number_format($spentNoVAT, 2, '.', ' ') . '</td>';
 
         echo '<td id="week_limit_cell_'.$cid.'" class="cell-weekday">';
         if ($week_limit !== null) {
             echo '<span style="'.($manual_limit_set ? 'color:#da8706;font-weight:bold;' : '').'">'
                 . number_format($week_limit, 0, ',', ' ') . ' ₽ / '
                 . number_format($day_limit, 0, ',', ' ') . ' ₽'
-                . ($manual_limit_set
-                    ? ' <span title="Введено вручную">*</span>
-                        <a href="#" onclick="editWeekLimit(\''.$cid.'\', '.$week_limit.'); return false;" style="margin-left:5px;" title="Изменить"><span style="font-size:1.1em;">✎</span></a>'
-                    : ''
-                )
+                . ($manual_limit_set ? ' <span title="Введено вручную">*</span> <a href="#" onclick="editWeekLimit(\''.$cid.'\', '.$week_limit.'); return false;" style="margin-left:5px;" title="Изменить">✎</a>' : '')
                 . '</span>';
         } else {
-            echo '<input type="number" min="1" style="width:95px;" placeholder="Лимит/неделя (0=удалить)"> ';
-            echo '<button onclick="saveWeekLimit(\''.$cid.'\', this)">Сохранить</button>';
+            echo '<input type="number" min="1" style="width:95px;" placeholder="Лимит/неделя"> <button onclick="saveWeekLimit(\''.$cid.'\', this)">OK</button>';
         }
         echo '</td>';
 
-        echo '<td class="cell-lim">'
-            . '<div style="font-weight:bold; font-size:1.15em; margin-bottom:3px;">'
-            . ($lim_val !== '' ? htmlspecialchars($lim_val) : '-') .
-            '</div>
-            <form method="post" style="display:flex;align-items:center;margin:0;">
-                <input name="save_limit" value="" placeholder="Изменить..." style="width:70px;text-align:right;">
-                <input type="hidden" name="cid" value="' . htmlspecialchars($cid) . '">
-                <button type="submit" title="Сохранить" style="margin-left:2px;cursor:pointer;">💾</button>
-            </form>
-        </td>';
-
+        echo '<td class="cell-lim"><div style="font-weight:bold; font-size:1.15em; margin-bottom:3px;">' . ($lim_val !== '' ? htmlspecialchars($lim_val) : '-') . '</div><form method="post" style="display:flex;align-items:center;margin:0;"><input name="save_limit" value="" placeholder="Лимит..." style="width:70px;text-align:right;"><input type="hidden" name="cid" value="' . htmlspecialchars($cid) . '"><button type="submit" title="Сохранить" style="margin-left:2px;cursor:pointer;">💾</button></form></td>';
         echo '</tr>';
     }
-
-    // Собираем только id для записи (старый формат)
     file_put_contents($stop_file, json_encode(array_keys($updated_stop_by_budgets), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 ?>
-        <tr class="total-row" id="totals-row"><td colspan="2">Итого:</td>
+        </tbody>
+        <tr class="total-row" id="totals-row">
+            <td colspan="2">Итого:</td>
             <td id="totals-cost">-</td>
             <td id="totals-spent">-</td>
             <td id="totals-weekday">-</td>
@@ -465,57 +409,53 @@ usort($campaigns, function($a, $b) use ($state_order) {
         </tr>
     </table>
 <script>
-// Данные для JS
 var jsData = <?php echo json_encode($jsData, JSON_UNESCAPED_UNICODE); ?>;
+var daysSortOrder = 'asc';
 
-// --- JS для ручного недельного лимита ---
+// --- Функция умной сортировки с приоритетом живых кампаний ---
+function sortByDays() {
+    const tbody = document.getElementById('table-body');
+    const rows = Array.from(tbody.querySelectorAll('tr.data-campaign-row'));
+
+    rows.sort((a, b) => {
+        const archA = parseInt(a.getAttribute('data-archived'));
+        const archB = parseInt(b.getAttribute('data-archived'));
+
+        // Архивные всегда в самом низу (0 выше чем 1)
+        if (archA !== archB) return archA - archB;
+
+        const valA = parseInt(a.getAttribute('data-days'));
+        const valB = parseInt(b.getAttribute('data-days'));
+        return daysSortOrder === 'asc' ? valA - valB : valB - valA;
+    });
+
+    daysSortOrder = (daysSortOrder === 'asc') ? 'desc' : 'asc';
+    rows.forEach(row => tbody.appendChild(row));
+}
+
 function saveWeekLimit(campaignId, btn) {
     var cell = document.getElementById('week_limit_cell_' + campaignId);
     var input = cell.querySelector('input');
     var val = parseInt(input.value);
-    if (isNaN(val) || val < 0) {
-        alert('Введите неотрицательное число');
-        return;
-    }
+    if (isNaN(val) || val < 0) { alert('Введите число'); return; }
     btn.disabled = true;
     fetch('', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: 'campaign_id=' + encodeURIComponent(campaignId) + '&week_limit=' + encodeURIComponent(val)
-    })
-    .then(r => r.json())
-    .then(res => {
-        if (res.success) {
-            if (val === 0) {
-                cell.innerHTML = '<input type="number" min="1" style="width:95px;" placeholder="Лимит/неделя (0=удалить)"> ' +
-                    '<button onclick="saveWeekLimit(\''+campaignId+'\', this)">Сохранить</button>';
-            } else {
-                cell.innerHTML = '<span style="color:#da8706;font-weight:bold;">' +
-                    res.week_limit + ' ₽ / ' + res.day_limit + ' ₽ <span title="Введено вручную">*</span>' +
-                    ' <a href="#" onclick="editWeekLimit(\''+campaignId+'\', '+res.week_limit+'); return false;" style="margin-left:5px;" title="Изменить"><span style="font-size:1.1em;">✎</span></a>' +
-                    '</span>';
-            }
-        } else {
-            alert('Ошибка: ' + (res.message || ''));
-            btn.disabled = false;
-        }
-    })
-    .catch(() => {
-        alert('Ошибка соединения');
-        btn.disabled = false;
+    }).then(r => r.json()).then(res => {
+        if (res.success) { location.reload(); } else { alert('Ошибка'); btn.disabled = false; }
     });
 }
 
 function editWeekLimit(campaignId, current) {
     var cell = document.getElementById('week_limit_cell_' + campaignId);
-    cell.innerHTML =
-        '<input type="number" min="0" value="'+current+'" style="width:95px;" placeholder="Лимит/неделя (0=удалить)"> ' +
-        '<button onclick="saveWeekLimit(\''+campaignId+'\', this)">Сохранить</button>';
+    cell.innerHTML = '<input type="number" min="0" value="'+current+'" style="width:95px;"> <button onclick="saveWeekLimit(\''+campaignId+'\', this)">OK</button>';
 }
 
 function budgetSearch() {
     var val = document.getElementById('searchInput').value.toLowerCase();
-    var rows = document.querySelectorAll('.budget-table tr.data-campaign-row');
+    var rows = document.querySelectorAll('.data-campaign-row');
     rows.forEach(function(tr) {
         var nameCell = tr.querySelector('td');
         if (!nameCell) return;
@@ -524,35 +464,29 @@ function budgetSearch() {
     });
     updateTotals();
 }
-document.getElementById('searchInput').addEventListener('keyup', function(e){
-    if (e.key === 'Enter') budgetSearch();
-});
+
+document.getElementById('searchInput').addEventListener('keyup', function(e){ if (e.key === 'Enter') budgetSearch(); });
 window.addEventListener('DOMContentLoaded', updateTotals);
 
 function updateTotals() {
-    var rows = document.querySelectorAll('.budget-table tr.data-campaign-row');
-    var total_cost = 0, total_spent = 0, total_week = 0, total_day = 0, total_lim = 0;
-    var cnt_week = 0, cnt_day = 0, cnt_lim = 0;
+    var rows = document.querySelectorAll('.data-campaign-row');
+    var t_cost = 0, t_spent = 0, t_week = 0, t_day = 0, t_lim = 0;
+    var c_week = 0, c_day = 0, c_lim = 0;
+
     rows.forEach(function(tr, idx){
         if (tr.style.display === 'none') return;
-        // По индексу в jsData (PHP сохраняет одинаково)
         var data = jsData[idx];
-        var cost = parseInt(data.cost) || 0;
-        total_cost += cost;
-        var spent = parseInt(data.spent) || 0;
-        total_spent += spent;
-        var week = parseInt(data.week_limit);
-        if (!isNaN(week) && week !== '') { total_week += week; cnt_week++; }
-        var day = parseInt(data.day_limit);
-        if (!isNaN(day) && day !== '') { total_day += day; cnt_day++; }
-        var lim = parseInt(data.lim_val);
-        if (!isNaN(lim) && lim !== '') { total_lim += lim; cnt_lim++; }
+        t_cost += parseFloat(data.cost) || 0;
+        t_spent += parseFloat(data.spent) || 0;
+        if (data.week_limit !== '') { t_week += parseInt(data.week_limit); c_week++; }
+        if (data.day_limit !== '') { t_day += parseInt(data.day_limit); c_day++; }
+        if (data.lim_val !== '') { t_lim += parseInt(data.lim_val); c_lim++; }
     });
-    document.getElementById('totals-cost').innerText = total_cost;
-    document.getElementById('totals-spent').innerText = total_spent;
-    document.getElementById('totals-weekday').innerText =
-        (cnt_week ? total_week : '-') + ' / ' + (cnt_day ? total_day : '-');
-    document.getElementById('totals-lim').innerText = cnt_lim ? total_lim : '-';
+
+    document.getElementById('totals-cost').innerText = t_cost.toLocaleString('ru-RU', {minimumFractionDigits: 2});
+    document.getElementById('totals-spent').innerText = t_spent.toLocaleString('ru-RU', {minimumFractionDigits: 2});
+    document.getElementById('totals-weekday').innerText = (c_week ? t_week.toLocaleString() : '-') + ' / ' + (c_day ? t_day.toLocaleString() : '-');
+    document.getElementById('totals-lim').innerText = c_lim ? t_lim.toLocaleString() : '-';
 }
 </script>
 </body>
