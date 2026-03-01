@@ -24,6 +24,17 @@ $budgets_file = __DIR__ . "/ln_budgets.json";
 if (!file_exists($budgets_file)) file_put_contents($budgets_file, "{}");
 $budgets = json_decode(file_get_contents($budgets_file), true);
 
+// --- Корректировки расхода (Ручной расход без НДС) ---
+$corrections_file = __DIR__ . "/ln_spent_corrections.json";
+if (!file_exists($corrections_file)) file_put_contents($corrections_file, "{}");
+$spent_corrections = json_decode(file_get_contents($corrections_file), true);
+
+// --- ШАБЛОНЫ ФИЛЬТРОВ ---
+$templates_file = __DIR__ . "/ln_filter_templates.json";
+if (!file_exists($templates_file)) file_put_contents($templates_file, "{}");
+$all_templates = json_decode(file_get_contents($templates_file), true);
+$client_templates = isset($all_templates[$clientLogin]) ? $all_templates[$clientLogin] : [];
+
 // --- Ручные недельные лимиты ---
 $manual_week_file = __DIR__ . "/manual_week_limits.json";
 if (!file_exists($manual_week_file)) file_put_contents($manual_week_file, "{}");
@@ -35,7 +46,43 @@ if (!file_exists($stop_file)) file_put_contents($stop_file, "[]");
 $stop_by_budgets = json_decode(file_get_contents($stop_file), true);
 if (!is_array($stop_by_budgets)) $stop_by_budgets = [];
 
-// --- POST: Массовое сохранение лимитов (для кнопок распределения и переноса) ---
+// --- POST: Сохранение шаблона фильтра ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_template'], $_POST['tpl_name'])) {
+    $name = trim($_POST['tpl_name']);
+    if ($name) {
+        $all_templates[$clientLogin][$name] = [
+            'search' => $_POST['tpl_search'] ?? '',
+            'status' => $_POST['tpl_status'] ?? 'all'
+        ];
+        file_put_contents($templates_file, json_encode($all_templates, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+    header("Location: ".$_SERVER['REQUEST_URI']); exit;
+}
+
+// --- POST: Удаление шаблона фильтра ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_template'])) {
+    $name = $_POST['delete_template'];
+    if (isset($all_templates[$clientLogin][$name])) {
+        unset($all_templates[$clientLogin][$name]);
+        file_put_contents($templates_file, json_encode($all_templates, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+    header("Location: ".$_SERVER['REQUEST_URI']); exit;
+}
+
+// --- POST: Сохранение корректировки расхода (0 = удалить) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_spent_correction'], $_POST['cid'])) {
+    $cid = $_POST['cid'];
+    $val = floatval($_POST['save_spent_correction']);
+    if ($val <= 0) {
+        unset($spent_corrections[$cid]);
+    } else {
+        $spent_corrections[$cid] = $val;
+    }
+    file_put_contents($corrections_file, json_encode($spent_corrections, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    header("Location: ".$_SERVER['REQUEST_URI']); exit;
+}
+
+// --- POST: Массовое сохранение лимитов ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_limits'])) {
     $data = json_decode($_POST['bulk_save_limits'], true);
     if (is_array($data)) {
@@ -51,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_limits'])) 
     exit;
 }
 
-// --- POST: сохранение лимитов ---
+// --- POST: сохранение одиночного лимита ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_limit'], $_POST['cid'])) {
     $cid = $_POST['cid'];
     $val = intval($_POST['save_limit']);
@@ -282,8 +329,8 @@ usort($campaigns, function($a, $b) use ($state_order) {
     .btn-quick-add:hover { background: #e0e0f0; border-color: #999; }
     .btn-action { padding:7px 18px; margin-left:10px; cursor:pointer; }
     .row-selector { width: 18px; height: 18px; cursor: pointer; }
-    .filter-label { margin-left: 20px; font-weight: bold; font-size: 0.95em; }
-    .filter-select { padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+    .template-box { background: #eee; padding: 8px 12px; border-radius: 6px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+    .manual-val { color: #d00; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -293,11 +340,24 @@ usort($campaigns, function($a, $b) use ($state_order) {
         <a href="https://direct.yandex.ru/dna/grid/campaigns?ulogin=<?=urlencode($clientLogin)?>" target="_blank" class="get-btn" style="margin-left:12px; background:#ded;">В кабинет Яндекс.Директ</a>
         <a href="javascript:history.back()" class="get-btn">Назад</a>
     </div>
+
+    <div class="template-box">
+        <strong>Шаблоны фильтров:</strong>
+        <select id="templateSelector" onchange="applyTemplate(this)" style="padding:5px;">
+            <option value="">-- Выбрать --</option>
+            <?php foreach ($client_templates as $name => $tpl): ?>
+                <option value="<?=htmlspecialchars($name)?>" data-search="<?=htmlspecialchars($tpl['search'])?>" data-status="<?=htmlspecialchars($tpl['status'])?>"><?=htmlspecialchars($name)?></option>
+            <?php endforeach; ?>
+        </select>
+        <button type="button" onclick="saveCurrentAsTemplate()" style="padding:5px 10px;">💾 Сохранить текущий фильтр</button>
+        <button type="button" onclick="deleteSelectedTemplate()" style="padding:5px; color:red;" title="Удалить выбранный шаблон">❌</button>
+    </div>
+
     <div style="margin:32px 0; display:flex; align-items:center; flex-wrap: wrap; gap: 10px;">
         <input type="text" id="searchInput" class="budget-search" placeholder="Поиск по имени..." style="padding:6px 10px; font-size:1em; width:200px;">
         
-        <label class="filter-label">Показать:</label>
-        <select id="statusFilter" class="filter-select" onchange="budgetSearch()">
+        <label style="margin-left:10px; font-weight:bold;">Показать:</label>
+        <select id="statusFilter" class="filter-select" onchange="budgetSearch()" style="padding:6px;">
             <option value="all">Все кампании</option>
             <option value="active_only">Только активные</option>
             <option value="hide_archived">Скрыть архивные</option>
@@ -306,8 +366,9 @@ usort($campaigns, function($a, $b) use ($state_order) {
 
         <button onclick="budgetSearch()" style="padding:7px 18px;">Найти</button>
         <button onclick="distributeRemainingBudget()" class="btn-action" style="background:#fdf; border:1px solid #c9c;" title="Выровнять остаток дней у всех выбранных">Распределить поровну</button>
-        <button onclick="transferRemainingBudget()" class="btn-action" style="background:#dfe; border:1px solid #9c9;" title="Перенести остаток с остановленных/приостановленных на активные">Перенести остаток 🔄</button>
+        <button onclick="transferRemainingBudget()" class="btn-action" style="background:#dfe; border:1px solid #9c9;" title="Перенести остаток с остановленных/оранжевых на активные">Перенести остаток 🔄</button>
     </div>
+
     <table class="budget-table" id="budgets-table">
         <thead>
             <tr>
@@ -315,7 +376,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
                 <th>Название кампании</th>
                 <th onclick="sortByDays()" class="sort-header" title="Нажмите для сортировки (Архив всегда внизу)">Дней / Статус ↕️</th>
                 <th>Расход за день</th>
-                <th>Общий расход</th>
+                <th>Общий расход (корректировка)</th>
                 <th>Лимит на неделю / день</th>
                 <th>Общий лимит</th>
             </tr>
@@ -329,26 +390,21 @@ usort($campaigns, function($a, $b) use ($state_order) {
         if (!is_array($all_stop_by_budgets)) $all_stop_by_budgets = [];
     }
     $updated_stop_by_budgets = [];
-    foreach ($all_stop_by_budgets as $val) {
+    foreach ($all_stop_by_budgets as $key => $val) {
         if (is_array($val) && isset($val['id'])) $updated_stop_by_budgets[$val['id']] = $val;
         elseif (is_numeric($val)) $updated_stop_by_budgets[$val] = $val;
     }
 
     foreach ($campaigns as $i => $camp) {
-        $state = strtoupper($camp['State']);
-        $cid = $camp['Id'];
+        $state = strtoupper($camp['State']); $cid = $camp['Id'];
         $lim_val = isset($budgets[$cid]) ? $budgets[$cid] : '';
         $is_archived = ($state === 'ARCHIVED') ? 1 : 0;
 
-        // Общий расход (Коэффициент 1.22)
-        $spent = 0;
-        if (isset($camp['Funds']['SharedAccountFunds']['Spend'])) {
-            $spent = $camp['Funds']['SharedAccountFunds']['Spend'];
-        } elseif (isset($camp['Funds']['CampaignFunds']['Spend'])) {
-            $spent = $camp['Funds']['CampaignFunds']['Spend'];
-        }
-        $spentRur = $spent / 1000000;
-        $spentNoVAT = round($spentRur / 1.22, 2);
+        // Расход: корректировка или API (с налогом 1.22)
+        $spent_api = ($camp['Funds']['SharedAccountFunds']['Spend'] ?? $camp['Funds']['CampaignFunds']['Spend'] ?? 0);
+        $spent_api_no_vat = round(($spent_api / 1000000) / 1.22, 2);
+        $is_manual_spent = isset($spent_corrections[$cid]);
+        $spent_final = $is_manual_spent ? $spent_corrections[$cid] : $spent_api_no_vat;
 
         // --- Лимиты ---
         $week_limit = null;
@@ -367,12 +423,8 @@ usort($campaigns, function($a, $b) use ($state_order) {
         }
 
         $day_limit = ($week_limit !== null) ? floor($week_limit / 7) : (isset($camp['DailyBudget']['Amount']) ? floor($camp['DailyBudget']['Amount'] / 1000000) : 0);
-
-        if ($lim_val !== '' && $day_limit > 0) {
-            $days_left = floor(max(0, ($lim_val - $spentNoVAT) / $day_limit));
-        } else {
-            $days_left = '-';
-        }
+        $days_left = ($lim_val !== '' && $day_limit > 0) ? floor(max(0, ($lim_val - $spent_final) / $day_limit)) : '-';
+        $sort_val = ($days_left === '-') ? 999999 : $days_left;
 
         if ($days_left !== '-' && $days_left <= 2) {
             $updated_stop_by_budgets[$cid] = ['id' => $cid, 'name' => $camp['Name'], 'login' => $clientLogin, 'days_left' => $days_left, 'date' => date('Y-m-d H:i:s')];
@@ -382,9 +434,8 @@ usort($campaigns, function($a, $b) use ($state_order) {
 
         $row_class = ($state === 'ARCHIVED') ? 'archived-campaign' : '';
         $cost = isset($spend_today[$cid]) ? $spend_today[$cid] : 0;
-        $sort_val = ($days_left === '-') ? 999999 : $days_left;
 
-        $jsData[] = ['cid'=>$cid, 'cost'=>$cost, 'spent'=>$spentNoVAT, 'week_limit'=>$week_limit??'', 'day_limit'=>$day_limit, 'lim_val'=>$lim_val ?: 0];
+        $jsData[] = ['cid' => $cid, 'cost' => $cost, 'spent' => $spent_final, 'week_limit' => ($week_limit !== null) ? $week_limit : '', 'day_limit' => $day_limit, 'lim_val' => ($lim_val !== '') ? $lim_val : 0];
 
         echo '<tr class="'.$row_class.' data-campaign-row" data-days="'.$sort_val.'" data-archived="'.$is_archived.'" data-idx="'.$i.'" data-state="'.$state.'">';
         echo '<td><input type="checkbox" class="row-selector" onchange="updateTotals()"></td>';
@@ -397,12 +448,25 @@ usort($campaigns, function($a, $b) use ($state_order) {
         }
         echo '</td>';
         echo '<td class="cell-cost">'.number_format($cost, 2, '.', ' ').'</td>';
-        echo '<td class="cell-spent">'.number_format($spentNoVAT, 2, '.', ' ').'</td>';
+
+        // Колонка общего расхода с СКРЫТОЙ корректировкой
+        echo '<td class="cell-spent">';
+        echo '  <div style="display:flex; align-items:center; justify-content:space-between;">';
+        echo '    <div style="'.($is_manual_spent ? 'color:#d00;font-weight:bold;' : '').'">'.number_format($spent_final, 2, '.', ' ').'</div>';
+        echo '    <button type="button" onclick="toggleCorrection(\''.$cid.'\')" style="background:none;border:none;cursor:pointer;font-size:0.9em;" title="Исправить расход">✏️</button>';
+        echo '  </div>';
+        echo '  <form method="post" id="corr_form_'.$cid.'" style="display:none; margin-top:5px; align-items:center;">';
+        echo '    <input name="save_spent_correction" style="width:65px; font-size:0.85em;" placeholder="0=Reset" value="'.($is_manual_spent ? $spent_corrections[$cid] : '').'">';
+        echo '    <input type="hidden" name="cid" value="'.$cid.'">';
+        echo '    <button type="submit" style="font-size:0.8em; margin-left:2px;">OK</button>';
+        echo '  </form>';
+        echo '</td>';
+
         echo '<td id="week_limit_cell_'.$cid.'">';
         if ($week_limit !== null) {
             echo '<span style="'.($manual_limit_set ? 'color:#da8706;font-weight:bold;' : '').'">' . number_format($week_limit, 0, ',', ' ') . ' ₽ / ' . number_format($day_limit, 0, ',', ' ') . ' ₽' . ($manual_limit_set ? ' <span title="Введено вручную">*</span> <a href="#" onclick="editWeekLimit(\''.$cid.'\', '.$week_limit.'); return false;" style="margin-left:5px;">✎</a>' : '') . '</span>';
         } else {
-            echo '<input type="number" min="1" style="width:95px;" placeholder="Неделя"> <button onclick="saveWeekLimit(\''.$cid.'\', this)">OK</button>';
+            echo '<input type="number" min="1" style="width:95px;" placeholder="Лимит/нед."> <button onclick="saveWeekLimit(\''.$cid.'\', this)">OK</button>';
         }
         echo '</td>';
         echo '<td class="cell-lim"><div style="font-weight:bold; font-size:1.15em; margin-bottom:3px;">'.($lim_val !== '' ? number_format($lim_val, 0, ',', ' ') : '-').'</div><form method="post" style="display:flex;align-items:center;margin:0;" id="form_lim_'.$cid.'"><input name="save_limit" style="width:70px;text-align:right;"><input type="hidden" name="cid" value="'.$cid.'"><button type="submit" style="margin-left:2px;cursor:pointer;">💾</button><div style="display:flex; gap:2px; margin-left:5px;">';
@@ -414,41 +478,57 @@ usort($campaigns, function($a, $b) use ($state_order) {
 ?>
         </tbody>
         <tr class="total-row" id="totals-row">
-            <td colspan="3">Итого (выбрано):</td>
-            <td id="totals-cost">-</td>
-            <td id="totals-spent">-</td>
-            <td id="totals-weekday">-</td>
-            <td id="totals-lim">-</td>
+            <td colspan="3">Итого (выбрано):</td><td id="totals-cost">0.00</td><td id="totals-spent">0.00</td><td id="totals-weekday">0 / 0</td><td id="totals-lim">0</td>
         </tr>
     </table>
+
+    <form id="tpl_save_form" method="post" style="display:none;">
+        <input type="hidden" name="save_template" value="1"><input type="hidden" name="tpl_name" id="tpl_name_in"><input type="hidden" name="tpl_search" id="tpl_search_in"><input type="hidden" name="tpl_status" id="tpl_status_in">
+    </form>
+    <form id="tpl_del_form" method="post" style="display:none;"><input type="hidden" name="delete_template" id="tpl_del_name"></form>
+
 <script>
 var jsData = <?php echo json_encode($jsData, JSON_UNESCAPED_UNICODE); ?>;
 var daysSortOrder = 'asc';
 
-// --- Фильтрация и поиск ---
+// --- ШАБЛОНЫ ---
+function applyTemplate(sel) {
+    var opt = sel.options[sel.selectedIndex]; if (!opt.value) return;
+    document.getElementById('searchInput').value = opt.getAttribute('data-search');
+    document.getElementById('statusFilter').value = opt.getAttribute('data-status');
+    budgetSearch();
+}
+function saveCurrentAsTemplate() {
+    var name = prompt("Введите название шаблона:"); if (!name) return;
+    document.getElementById('tpl_name_in').value = name;
+    document.getElementById('tpl_search_in').value = document.getElementById('searchInput').value;
+    document.getElementById('tpl_status_in').value = document.getElementById('statusFilter').value;
+    document.getElementById('tpl_save_form').submit();
+}
+function deleteSelectedTemplate() {
+    var sel = document.getElementById('templateSelector');
+    if (!sel.value || !confirm("Удалить шаблон '" + sel.value + "'?")) return;
+    document.getElementById('tpl_del_name').value = sel.value; document.getElementById('tpl_del_form').submit();
+}
+
+function toggleCorrection(cid) { var f = document.getElementById('corr_form_' + cid); f.style.display = (f.style.display === 'none' || f.style.display === '') ? 'flex' : 'none'; }
+
 function budgetSearch() {
-    var val = document.getElementById('searchInput').value.toLowerCase();
-    var filter = document.getElementById('statusFilter').value;
-    var rows = document.querySelectorAll('.data-campaign-row');
-    rows.forEach(function(tr) {
-        var name = tr.querySelector('td:nth-child(2)').innerText.toLowerCase();
-        var state = tr.getAttribute('data-state');
-        var mS = (!val || name.indexOf(val) !== -1);
-        var mF = (filter === 'all') || (filter === 'active_only' && state === 'ON') || (filter === 'hide_archived' && state !== 'ARCHIVED') || (filter === 'hide_stopped' && state !== 'OFF');
+    var v = document.getElementById('searchInput').value.toLowerCase(), f = document.getElementById('statusFilter').value;
+    document.querySelectorAll('.data-campaign-row').forEach(tr => {
+        var n = tr.querySelector('td:nth-child(2)').innerText.toLowerCase(), s = tr.getAttribute('data-state');
+        var mS = (!v || n.indexOf(v) !== -1), mF = (f === 'all') || (f === 'active_only' && s === 'ON') || (f === 'hide_archived' && s !== 'ARCHIVED') || (f === 'hide_stopped' && s !== 'OFF');
         tr.style.display = (mS && mF) ? '' : 'none';
     });
     updateTotals();
 }
 
-// --- Итоги (выбранные и видимые) ---
 function updateTotals() {
-    var rows = document.querySelectorAll('.data-campaign-row');
     var tc = 0, ts = 0, tw = 0, td = 0, tl = 0, cw = 0, cd = 0, cl = 0;
-    rows.forEach(tr => {
+    document.querySelectorAll('.data-campaign-row').forEach(tr => {
         if (tr.style.display !== 'none' && tr.querySelector('.row-selector').checked) {
-            var d = jsData[tr.getAttribute('data-idx')];
-            if (!d) return;
-            tc += parseFloat(d.cost) || 0; ts += parseFloat(d.spent) || 0;
+            var d = jsData[tr.getAttribute('data-idx')]; if (!d) return;
+            tc += parseFloat(d.cost); ts += parseFloat(d.spent);
             if (d.week_limit !== '') { tw += parseInt(d.week_limit); cw++; }
             if (d.day_limit > 0) { td += parseInt(d.day_limit); cd++; }
             if (d.lim_val > 0) { tl += parseInt(d.lim_val); cl++; }
@@ -460,22 +540,18 @@ function updateTotals() {
     document.getElementById('totals-lim').innerText = tl.toLocaleString();
 }
 
-// --- Перенос бюджета ---
 function transferRemainingBudget() {
-    var selActive = [], selStopped = [], pool = 0, remA = 0, dailyA = 0;
+    var selA = [], selS = [], pool = 0, remA = 0, dailyA = 0;
     document.querySelectorAll('.data-campaign-row').forEach(tr => {
         if (tr.style.display !== 'none' && tr.querySelector('.row-selector').checked) {
-            var d = jsData[tr.getAttribute('data-idx')], state = tr.getAttribute('data-state'), daily = parseFloat(d.day_limit), spent = parseFloat(d.spent), rem = Math.max(0, parseFloat(d.lim_val) - spent);
-            if (state === 'OFF' || state === 'SUSPENDED') { pool += rem; selStopped.push({cid: d.cid, spent: spent}); }
-            else if (state === 'ON' && daily > 0) { remA += rem; dailyA += daily; selActive.push({cid: d.cid, spent: spent, daily: daily}); }
+            var d = jsData[tr.getAttribute('data-idx')], st = tr.getAttribute('data-state'), daily = parseFloat(d.day_limit), spent = parseFloat(d.spent), rem = Math.max(0, parseFloat(d.lim_val) - spent);
+            if (st === 'OFF' || st === 'SUSPENDED') { pool += rem; selS.push({cid: d.cid, spent: spent}); }
+            else if (st === 'ON' && daily > 0) { remA += rem; dailyA += daily; selA.push({cid: d.cid, spent: spent, daily: daily}); }
         }
     });
-    if (!selStopped.length || !selActive.length) return alert("Выберите активные и остановленные/оранжевые кампании!");
-    var targetDays = (remA + pool) / dailyA;
-    if (!confirm("Перенести " + Math.round(pool) + " ₽ на активные?")) return;
-    var bulk = {};
-    selStopped.forEach(i => bulk[i.cid] = Math.round(i.spent));
-    selActive.forEach(i => bulk[i.cid] = Math.round(i.spent + (targetDays * i.daily)));
+    if (!selS.length || !selA.length) return alert("Выберите активные и остановленные/оранжевые кампании!");
+    var target = (remA + pool) / dailyA; if (!confirm("Перенести " + Math.round(pool) + " ₽ на активные?")) return;
+    var bulk = {}; selS.forEach(i => bulk[i.cid] = Math.round(i.spent)); selA.forEach(i => bulk[i.cid] = Math.round(i.spent + (target * i.daily)));
     sendBulk(bulk);
 }
 
@@ -488,25 +564,12 @@ function distributeRemainingBudget() {
         }
     });
     if (!sel.length) return alert("Выберите кампании!");
-    var target = pool / dailyT;
-    var bulk = {}; sel.forEach(i => bulk[i.cid] = Math.round(i.spent + (target * i.daily)));
-    sendBulk(bulk);
+    var target = pool / dailyT; var bulk = {}; sel.forEach(i => bulk[i.cid] = Math.round(i.spent + (target * i.daily))); sendBulk(bulk);
 }
 
-function sendBulk(data) {
-    fetch('', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'bulk_save_limits=' + encodeURIComponent(JSON.stringify(data)) }).then(r => r.json()).then(res => { if (res.success) location.reload(); });
-}
-
-function toggleAllRows(m) {
-    document.querySelectorAll('.data-campaign-row').forEach(tr => { if (tr.style.display !== 'none') tr.querySelector('.row-selector').checked = m.checked; });
-    updateTotals();
-}
-
-function quickAddBudget(cid, daily, cur) {
-    var inp = document.getElementById('form_lim_' + cid).querySelector('input[name="save_limit"]');
-    inp.value = Math.round(cur + (daily * 30)); inp.form.submit();
-}
-
+function sendBulk(d) { fetch('', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'bulk_save_limits=' + encodeURIComponent(JSON.stringify(d)) }).then(r => r.json()).then(res => { if (res.success) location.reload(); }); }
+function toggleAllRows(m) { document.querySelectorAll('.data-campaign-row').forEach(tr => { if (tr.style.display !== 'none') tr.querySelector('.row-selector').checked = m.checked; }); updateTotals(); }
+function quickAddBudget(cid, daily, cur) { var inp = document.getElementById('form_lim_' + cid).querySelector('input[name="save_limit"]'); inp.value = Math.round(cur + (daily * 30)); inp.form.submit(); }
 function quickAdjustLimit(cid, act, cur) {
     var am = prompt("Сумма:"); if (!am || isNaN(am)) return;
     var inp = document.getElementById('form_lim_' + cid).querySelector('input[name="save_limit"]');
@@ -514,8 +577,7 @@ function quickAdjustLimit(cid, act, cur) {
 }
 
 function sortByDays() {
-    const tbody = document.getElementById('table-body');
-    const rows = Array.from(tbody.querySelectorAll('tr.data-campaign-row'));
+    const tbody = document.getElementById('table-body'), rows = Array.from(tbody.querySelectorAll('tr.data-campaign-row'));
     rows.sort((a, b) => {
         const archA = parseInt(a.getAttribute('data-archived')), archB = parseInt(b.getAttribute('data-archived'));
         if (archA !== archB) return archA - archB;
