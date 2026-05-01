@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var clientsData = [];
     var container = document.getElementById('clientsDataContainer');
 
-    // --- Функция рендера таблицы клиентов ---
+    // --- Функция рендера таблицы клиентов (С добавленными чекбоксами) ---
     function renderClientsTable(clients, container) {
         var active = clients.filter(function(c) { return c.active_campaigns > 0; });
         var inactive = clients.filter(function(c) { return c.active_campaigns === 0; });
@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         var html = '<table class="clients-table">';
         html += '<thead><tr>' +
+            '<th style="width:30px;"><input type="checkbox" id="selectAllClients" onclick="toggleAllClients(this)" title="Выбрать всех"></th>' +
             '<th>ID клиента</th>' +
             '<th>Login</th>' +
             '<th>Название</th>' +
@@ -41,6 +42,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         all.forEach(function(client) {
             html += '<tr class="' + (client.active_campaigns > 0 ? 'client-active' : 'client-inactive') + '">';
+            
+            // Чекбокс для конкретного клиента
+            html += '<td><input type="checkbox" class="client-row-selector" value="' + escapeHtml(client.login) + '"></td>';
+            
             html += '<td>' + client.id + '</td>';
             html += '<td><a href="https://direct.yandex.ru/dna/grid/campaigns/?ulogin=' +
                 encodeURIComponent(client.login) +
@@ -217,3 +222,11 @@ function resetProgressBtns() {
     });
 }
 window.addEventListener('pageshow', resetProgressBtns);
+
+// --- Функция для выбора/снятия выбора всех клиентов ---
+window.toggleAllClients = function(source) {
+    var checkboxes = document.querySelectorAll('.client-row-selector');
+    checkboxes.forEach(function(cb) {
+        cb.checked = source.checked;
+    });
+};
