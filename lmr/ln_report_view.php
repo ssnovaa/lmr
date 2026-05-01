@@ -73,11 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_template'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_spent_correction'], $_POST['cid'])) {
     $cid = $_POST['cid'];
     $val = floatval($_POST['save_spent_correction']);
-    if ($val <= 0) {
-        unset($spent_corrections[$cid]);
-    } else {
-        $spent_corrections[$cid] = $val;
-    }
+    if ($val <= 0) unset($spent_corrections[$cid]);
+    else $spent_corrections[$cid] = $val;
     file_put_contents($corrections_file, json_encode($spent_corrections, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
     header("Location: ".$_SERVER['REQUEST_URI']); exit;
 }
@@ -86,15 +83,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_spent_correction
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_limits'])) {
     $data = json_decode($_POST['bulk_save_limits'], true);
     if (is_array($data)) {
-        foreach ($data as $cid => $val) {
-            $budgets[$cid] = intval($val);
-        }
+        foreach ($data as $cid => $val) { $budgets[$cid] = intval($val); }
         file_put_contents($budgets_file, json_encode($budgets, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
         header('Content-Type: application/json');
         echo json_encode(['success' => true]);
-    } else {
-        echo json_encode(['success' => false]);
-    }
+    } else { echo json_encode(['success' => false]); }
     exit;
 }
 
@@ -107,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_limit'], $_POST[
     header("Location: ".$_SERVER['REQUEST_URI']); exit;
 }
 
-// --- Сохранение недельного лимита через AJAX ---
+// --- AJAX: сохранение недельного лимита ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['campaign_id'], $_POST['week_limit'])) {
     $cid = $_POST['campaign_id'];
     $week_limit = max(0, intval($_POST['week_limit']));
@@ -130,10 +123,7 @@ if (!$access_token) die('Пустой токен!');
 
 // --- POST: смена статуса кампании ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_status'], $_POST['cid'], $_POST['login'])) {
-    $cid = $_POST['cid'];
-    $login = $_POST['login'];
-    $action = $_POST['change_status'];
-    change_campaign_status($access_token, $login, $cid, $action);
+    change_campaign_status($access_token, $_POST['login'], $_POST['cid'], $_POST['change_status']);
     header("Location: ".$_SERVER['REQUEST_URI']); exit;
 }
 
@@ -148,11 +138,7 @@ function change_campaign_status($access_token, $client_login, $campaign_id, $act
     ];
     $body = [
         "method" => $action,
-        "params" => [
-            "SelectionCriteria" => [
-                "Ids" => [$campaign_id]
-            ]
-        ]
+        "params" => ["SelectionCriteria" => ["Ids" => [$campaign_id]]]
     ];
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_POST, 1);
@@ -264,9 +250,7 @@ function get_campaigns_details_by_ids($access_token, $client_login, $ids) {
     $body = [
         'method' => 'get',
         'params' => [
-            'SelectionCriteria' => [
-                'Ids' => $ids
-            ],
+            'SelectionCriteria' => ['Ids' => $ids],
             'FieldNames' => ['Id', 'Name', 'State', 'Status', 'Type', 'Funds', 'DailyBudget', 'StartDate'],
             'TextCampaignFieldNames' => ["BiddingStrategy", "Settings"]
         ]
@@ -286,17 +270,11 @@ function get_campaigns_details_by_ids($access_token, $client_login, $ids) {
 
 function state_icon($state) {
     $state = strtoupper($state);
-    if ($state === 'ON') {
-        return '<span style="color:green;font-size:1.2em;" title="Активна">&#9679;</span>';
-    } elseif ($state === 'OFF') {
-        return '<span style="color:#bb2c2c;font-size:1.2em;" title="Остановлена">&#9679;</span>';
-    } elseif ($state === 'SUSPENDED') {
-        return '<span style="color:orange;font-size:1.2em;" title="Приостановлена">&#9679;</span>';
-    } elseif ($state === 'ARCHIVED') {
-        return '<span style="color:gray;font-size:1.2em;" title="Архив/Снята">&#9679;</span>';
-    } else {
-        return '<span style="color:gray;font-size:1.2em;" title="' . htmlspecialchars($state) . '">&#9679;</span>';
-    }
+    if ($state === 'ON') return '<span style="color:green;font-size:1.2em;" title="Активна">&#9679;</span>';
+    if ($state === 'OFF') return '<span style="color:#bb2c2c;font-size:1.2em;" title="Остановлена">&#9679;</span>';
+    if ($state === 'SUSPENDED') return '<span style="color:orange;font-size:1.2em;" title="Приостановлена">&#9679;</span>';
+    if ($state === 'ARCHIVED') return '<span style="color:gray;font-size:1.2em;" title="Архив">&#9679;</span>';
+    return '<span style="color:gray;font-size:1.2em;">&#9679;</span>';
 }
 
 // --- Получаем данные ---
@@ -327,9 +305,10 @@ usort($campaigns, function($a, $b) use ($state_order) {
     .sort-header:hover { color: #000; }
     .btn-quick-add { margin-left: 4px; padding: 2px 6px; font-size: 0.85em; cursor: pointer; background: #f0f0f5; border: 1px solid #ccc; border-radius: 3px; color: #333; }
     .btn-quick-add:hover { background: #e0e0f0; border-color: #999; }
-    .btn-action { padding:7px 18px; margin-left:10px; cursor:pointer; }
+    .btn-action { padding:7px 15px; cursor:pointer; font-size: 0.9em; }
     .row-selector { width: 18px; height: 18px; cursor: pointer; }
-    .template-box { background: #eee; padding: 8px 12px; border-radius: 6px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+    .template-box { background: #f4f4f9; padding: 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #ddd; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .divider { height: 24px; width: 1px; background: #ccc; margin: 0 5px; }
     .manual-val { color: #d00; font-weight: bold; }
     </style>
 </head>
@@ -342,22 +321,24 @@ usort($campaigns, function($a, $b) use ($state_order) {
     </div>
 
     <div class="template-box">
+        <input type="text" id="searchInput" class="budget-search" placeholder="Поиск по имени..." style="padding:6px 10px; width:180px;" onkeyup="if(event.key==='Enter') budgetSearch()">
+        
+        <div class="divider"></div>
+
         <strong>Шаблоны фильтров:</strong>
-        <select id="templateSelector" onchange="applyTemplate(this)" style="padding:5px;">
+        <select id="templateSelector" onchange="applyTemplate(this)" style="padding:5px; max-width: 150px;">
             <option value="">-- Выбрать --</option>
             <?php foreach ($client_templates as $name => $tpl): ?>
                 <option value="<?=htmlspecialchars($name)?>" data-search="<?=htmlspecialchars($tpl['search'])?>" data-status="<?=htmlspecialchars($tpl['status'])?>"><?=htmlspecialchars($name)?></option>
             <?php endforeach; ?>
         </select>
-        <button type="button" onclick="saveCurrentAsTemplate()" style="padding:5px 10px;">💾 Сохранить текущий фильтр</button>
+        <button type="button" onclick="saveCurrentAsTemplate()" style="padding:5px 8px;" title="Сохранить текущий поиск и фильтры">💾 Сохранить</button>
         <button type="button" onclick="deleteSelectedTemplate()" style="padding:5px; color:red;" title="Удалить выбранный шаблон">❌</button>
     </div>
 
-    <div style="margin:32px 0; display:flex; align-items:center; flex-wrap: wrap; gap: 10px;">
-        <input type="text" id="searchInput" class="budget-search" placeholder="Поиск по имени..." style="padding:6px 10px; font-size:1em; width:200px;">
-        
-        <label style="margin-left:10px; font-weight:bold;">Показать:</label>
-        <select id="statusFilter" class="filter-select" onchange="budgetSearch()" style="padding:6px;">
+    <div style="margin:20px 0; display:flex; align-items:center; flex-wrap: wrap; gap: 10px;">
+        <label style="font-weight:bold;">Показать:</label>
+        <select id="statusFilter" style="padding:6px;" onchange="budgetSearch()">
             <option value="all">Все кампании</option>
             <option value="active_only">Только активные</option>
             <option value="hide_archived">Скрыть архивные</option>
@@ -365,8 +346,9 @@ usort($campaigns, function($a, $b) use ($state_order) {
         </select>
 
         <button onclick="budgetSearch()" style="padding:7px 18px;">Найти</button>
-        <button onclick="distributeRemainingBudget()" class="btn-action" style="background:#fdf; border:1px solid #c9c;" title="Выровнять остаток дней у всех выбранных">Распределить поровну</button>
-        <button onclick="transferRemainingBudget()" class="btn-action" style="background:#dfe; border:1px solid #9c9;" title="Перенести остаток с остановленных/оранжевых на активные">Перенести остаток 🔄</button>
+
+        <button onclick="distributeRemainingBudget()" class="btn-action" style="background:#fdf; border:1px solid #c9c;" title="Выровнять остаток дней у выбранных">Распределить поровну</button>
+        <button onclick="transferRemainingBudget()" class="btn-action" style="background:#dfe; border:1px solid #9c9;" title="Перенести бюджет с остановленных/оранжевых на активные">Перенести остаток 🔄</button>
     </div>
 
     <table class="budget-table" id="budgets-table">
@@ -376,7 +358,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
                 <th>Название кампании</th>
                 <th onclick="sortByDays()" class="sort-header" title="Нажмите для сортировки (Архив всегда внизу)">Дней / Статус ↕️</th>
                 <th>Расход за день</th>
-                <th>Общий расход (корректировка)</th>
+                <th>Общий расход (исправление)</th>
                 <th>Лимит на неделю / день</th>
                 <th>Общий лимит</th>
             </tr>
@@ -390,7 +372,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         if (!is_array($all_stop_by_budgets)) $all_stop_by_budgets = [];
     }
     $updated_stop_by_budgets = [];
-    foreach ($all_stop_by_budgets as $key => $val) {
+    foreach ($all_stop_by_budgets as $val) {
         if (is_array($val) && isset($val['id'])) $updated_stop_by_budgets[$val['id']] = $val;
         elseif (is_numeric($val)) $updated_stop_by_budgets[$val] = $val;
     }
@@ -406,7 +388,7 @@ usort($campaigns, function($a, $b) use ($state_order) {
         $is_manual_spent = isset($spent_corrections[$cid]);
         $spent_final = $is_manual_spent ? $spent_corrections[$cid] : $spent_api_no_vat;
 
-        // --- Лимиты ---
+        // Лимиты
         $week_limit = null;
         if (isset($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit']) && $camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] > 0) {
             $week_limit = floor($camp['TextCampaign']['BiddingStrategy']['Search']['AverageCpa']['WeeklySpendLimit'] / 1000000);
@@ -432,28 +414,25 @@ usort($campaigns, function($a, $b) use ($state_order) {
             unset($updated_stop_by_budgets[$cid]);
         }
 
-        $row_class = ($state === 'ARCHIVED') ? 'archived-campaign' : '';
-        $cost = isset($spend_today[$cid]) ? $spend_today[$cid] : 0;
+        $jsData[] = ['cid' => $cid, 'cost' => isset($spend_today[$cid])?$spend_today[$cid]:0, 'spent' => $spent_final, 'week_limit' => ($week_limit !== null) ? $week_limit : '', 'day_limit' => $day_limit, 'lim_val' => ($lim_val !== '') ? $lim_val : 0];
 
-        $jsData[] = ['cid' => $cid, 'cost' => $cost, 'spent' => $spent_final, 'week_limit' => ($week_limit !== null) ? $week_limit : '', 'day_limit' => $day_limit, 'lim_val' => ($lim_val !== '') ? $lim_val : 0];
-
-        echo '<tr class="'.$row_class.' data-campaign-row" data-days="'.$sort_val.'" data-archived="'.$is_archived.'" data-idx="'.$i.'" data-state="'.$state.'">';
+        echo '<tr class="'.(($state === 'ARCHIVED') ? 'archived-campaign' : '').' data-campaign-row" data-days="'.$sort_val.'" data-archived="'.$is_archived.'" data-idx="'.$i.'" data-state="'.$state.'">';
         echo '<td><input type="checkbox" class="row-selector" onchange="updateTotals()"></td>';
         echo '<td style="padding-left:10px;"><a href="https://direct.yandex.ru/dna/campaigns-edit?ulogin='.urlencode($clientLogin).'&campaigns-ids='.urlencode($cid).'" target="_blank" style="color:#7b288f; text-decoration:underline;">'.htmlspecialchars($camp['Name']).'</a></td>';
-        echo '<td>' . $days_left . ' &nbsp; ' . state_icon($camp['State']) . ' <span style="color:#555; display:none">' . htmlspecialchars($camp['State']) . '</span>';
+        echo '<td>' . $days_left . ' &nbsp; ' . state_icon($camp['State']);
         if ($state === 'ON') {
             echo '<form method="post" style="display:inline;margin-left:8px;"><input type="hidden" name="cid" value="'.$cid.'"><input type="hidden" name="login" value="'.$clientLogin.'"><button name="change_status" value="suspend" title="Остановить" style="background:none;border:none;color:#bb2c2c;cursor:pointer;">⏸️</button></form>';
         } elseif ($state === 'OFF') {
             echo '<form method="post" style="display:inline;margin-left:8px;"><input type="hidden" name="cid" value="'.$cid.'"><input type="hidden" name="login" value="'.$clientLogin.'"><button name="change_status" value="resume" title="Включить" style="background:none;border:none;color:green;cursor:pointer;">▶️</button></form>';
         }
         echo '</td>';
-        echo '<td class="cell-cost">'.number_format($cost, 2, '.', ' ').'</td>';
+        echo '<td class="cell-cost">'.number_format($jsData[$i]['cost'], 2, '.', ' ').'</td>';
 
-        // Колонка общего расхода с СКРЫТОЙ корректировкой
+        // Общий расход с СКРЫТОЙ корректировкой
         echo '<td class="cell-spent">';
         echo '  <div style="display:flex; align-items:center; justify-content:space-between;">';
         echo '    <div style="'.($is_manual_spent ? 'color:#d00;font-weight:bold;' : '').'">'.number_format($spent_final, 2, '.', ' ').'</div>';
-        echo '    <button type="button" onclick="toggleCorrection(\''.$cid.'\')" style="background:none;border:none;cursor:pointer;font-size:0.9em;" title="Исправить расход">✏️</button>';
+        echo '    <button type="button" onclick="toggleCorrection(\''.$cid.'\')" style="background:none;border:none;cursor:pointer;font-size:0.9em;" title="Исправить расход (0 = сброс)">✏️</button>';
         echo '  </div>';
         echo '  <form method="post" id="corr_form_'.$cid.'" style="display:none; margin-top:5px; align-items:center;">';
         echo '    <input name="save_spent_correction" style="width:65px; font-size:0.85em;" placeholder="0=Reset" value="'.($is_manual_spent ? $spent_corrections[$cid] : '').'">';
@@ -491,7 +470,6 @@ usort($campaigns, function($a, $b) use ($state_order) {
 var jsData = <?php echo json_encode($jsData, JSON_UNESCAPED_UNICODE); ?>;
 var daysSortOrder = 'asc';
 
-// --- ШАБЛОНЫ ---
 function applyTemplate(sel) {
     var opt = sel.options[sel.selectedIndex]; if (!opt.value) return;
     document.getElementById('searchInput').value = opt.getAttribute('data-search');
@@ -499,7 +477,7 @@ function applyTemplate(sel) {
     budgetSearch();
 }
 function saveCurrentAsTemplate() {
-    var name = prompt("Введите название шаблона:"); if (!name) return;
+    var name = prompt("Название шаблона:"); if (!name) return;
     document.getElementById('tpl_name_in').value = name;
     document.getElementById('tpl_search_in').value = document.getElementById('searchInput').value;
     document.getElementById('tpl_status_in').value = document.getElementById('statusFilter').value;
@@ -549,7 +527,7 @@ function transferRemainingBudget() {
             else if (st === 'ON' && daily > 0) { remA += rem; dailyA += daily; selA.push({cid: d.cid, spent: spent, daily: daily}); }
         }
     });
-    if (!selS.length || !selA.length) return alert("Выберите активные и остановленные/оранжевые кампании!");
+    if (!selS.length || !selA.length) return alert("Выберите активные и остановленные/оранжевые!");
     var target = (remA + pool) / dailyA; if (!confirm("Перенести " + Math.round(pool) + " ₽ на активные?")) return;
     var bulk = {}; selS.forEach(i => bulk[i.cid] = Math.round(i.spent)); selA.forEach(i => bulk[i.cid] = Math.round(i.spent + (target * i.daily)));
     sendBulk(bulk);
@@ -564,11 +542,12 @@ function distributeRemainingBudget() {
         }
     });
     if (!sel.length) return alert("Выберите кампании!");
-    var target = pool / dailyT; var bulk = {}; sel.forEach(i => bulk[i.cid] = Math.round(i.spent + (target * i.daily))); sendBulk(bulk);
+    var target = pool / dailyT; var bulk = {};
+    sel.forEach(i => bulk[i.cid] = Math.round(i.spent + (target * i.daily))); sendBulk(bulk);
 }
 
 function sendBulk(d) { fetch('', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'bulk_save_limits=' + encodeURIComponent(JSON.stringify(d)) }).then(r => r.json()).then(res => { if (res.success) location.reload(); }); }
-function toggleAllRows(m) { document.querySelectorAll('.data-campaign-row').forEach(tr => { if (tr.style.display !== 'none') tr.querySelector('.row-selector').checked = m.checked; }); updateTotals(); }
+function toggleAllRows(m) { document.querySelectorAll('.row-selector').forEach(chk => { if (chk.closest('tr').style.display !== 'none') chk.checked = m.checked; }); updateTotals(); }
 function quickAddBudget(cid, daily, cur) { var inp = document.getElementById('form_lim_' + cid).querySelector('input[name="save_limit"]'); inp.value = Math.round(cur + (daily * 30)); inp.form.submit(); }
 function quickAdjustLimit(cid, act, cur) {
     var am = prompt("Сумма:"); if (!am || isNaN(am)) return;
@@ -599,7 +578,6 @@ function editWeekLimit(campaignId, current) {
     document.getElementById('week_limit_cell_' + campaignId).innerHTML = '<input type="number" value="'+current+'" style="width:95px;"> <button onclick="saveWeekLimit(\''+campaignId+'\', this)">OK</button>';
 }
 
-document.getElementById('searchInput').addEventListener('keyup', e => { if (e.key === 'Enter') budgetSearch(); });
 window.addEventListener('DOMContentLoaded', updateTotals);
 </script>
 </body>
