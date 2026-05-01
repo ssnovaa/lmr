@@ -15,11 +15,9 @@ if (!file_exists($stop_file)) exit(json_encode(['stopped' => 0, 'debug' => ['Ф�
 $stop_by_budgets = json_decode(file_get_contents($stop_file), true);
 if (!is_array($stop_by_budgets)) $stop_by_budgets = [];
 
-// --- Берём токен из файла ---
-$token_file = __DIR__ . '/../ya_access_token.txt';
-if (!file_exists($token_file)) exit(json_encode(['stopped' => 0, 'debug' => ['Нет файла токена']]));
-$access_token = trim(file_get_contents($token_file));
-if (!$access_token) exit(json_encode(['stopped' => 0, 'debug' => ['Пустой токен']]));
+session_start();
+$access_token = $_SESSION['ya_access_token'] ?? null;
+if (!$access_token) exit(json_encode(['stopped' => 0, 'debug' => ['Нет access_token']]));
 
 $count = 0;
 $debug = [];
@@ -85,7 +83,7 @@ function get_campaigns_details_by_ids($access_token, $client_login, $ids) {
     return $data['result']['Campaigns'] ?? [];
 }
 
-// --- Собираем кампании для каждого логина, пакетно ---
+// --- Собираем кампании для каждого логина, пакетно --- 
 $login_campaigns = [];
 foreach ($stop_by_budgets as $cid) {
     if (!isset($campaign_logins[$cid])) {

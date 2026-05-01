@@ -2,11 +2,15 @@
 require_once 'auth_check.php';
 header('Content-Type: application/json');
 
-session_start();
-$token = $_SESSION['ya_access_token'] ?? null;
-
+// Читаем токен Яндекса из файла (без сессий)
+$token_file = __DIR__ . '/../ya_access_token.txt';
+if (!file_exists($token_file)) {
+    echo json_encode(['error' => 'Файл токена не найден']);
+    exit;
+}
+$token = trim(file_get_contents($token_file));
 if (!$token) {
-    echo json_encode(['error' => 'Необходима авторизация Яндекс']);
+    echo json_encode(['error' => 'Токен пустой']);
     exit;
 }
 
