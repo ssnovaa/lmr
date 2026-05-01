@@ -1,8 +1,15 @@
 <?php
-require_once "auth_check.php";
+require_once __DIR__ . '/auth_check.php';
 
-$access_token = $_SESSION['ya_access_token'] ?? null;
-if (!$access_token) die("Нет access_token в сессии!");
+// Получаем токен Яндекса из файла в корне проекта
+$token_file = __DIR__ . '/../ya_access_token.txt';
+if (!file_exists($token_file)) {
+    die("Файл токена не найден! Авторизация не пройдена.");
+}
+$access_token = trim(file_get_contents($token_file));
+if (!$access_token) {
+    die("Токен пустой! Авторизация не пройдена.");
+}
 
 // Проверяем clients_ln_active.json
 $clients_file = __DIR__ . "/clients_ln_active.json";
@@ -31,7 +38,6 @@ if (!file_exists($stop_file)) file_put_contents($stop_file, "[]");
 $stop_by_budgets_raw = file_get_contents($stop_file);
 $stop_by_budgets = json_decode($stop_by_budgets_raw, true);
 if (!is_array($stop_by_budgets)) $stop_by_budgets = [];
-
 // --- POST-запросы ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_limit'], $_POST['cid'])) {
     $cid = $_POST['cid'];
@@ -63,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['change_status'], $_PO
     header("Location: ".$_SERVER['REQUEST_URI']); exit;
 }
 
+// --- Функции для API Яндекс.Директа ---
 function change_campaign_status($access_token, $client_login, $campaign_id, $action) {
     $url = 'https://api.direct.yandex.com/json/v5/campaigns';
     $headers = [
@@ -87,8 +94,6 @@ function change_campaign_status($access_token, $client_login, $campaign_id, $act
     curl_exec($ch);
     curl_close($ch);
 }
-
-// --- ОБНОВЛЁННАЯ функция для проверки прав ---
 function get_active_campaigns_ids($access_token, $client_login) {
     $url = 'https://api.direct.yandex.com/json/v5/campaigns';
     $headers = [
@@ -115,7 +120,6 @@ function get_active_campaigns_ids($access_token, $client_login) {
 
     $data = json_decode($response, true);
     if (!empty($data['error'])) {
-        // Нет прав — возвращаем false
         return false;
     }
     $ids = [];
@@ -128,6 +132,7 @@ function get_active_campaigns_ids($access_token, $client_login) {
     }
     return $ids;
 }
+
 function get_campaigns_daily_spend($access_token, $client_login, $ids) {
     if (empty($ids) || $ids === false) return [];
     $url = 'https://api.direct.yandex.com/json/v5/reports';

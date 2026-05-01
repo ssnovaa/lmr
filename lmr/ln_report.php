@@ -47,18 +47,17 @@ $edit_client = $_GET['edit'] ?? null;
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Lmr — клиенты</title>
+    <title>LN — клиенты</title>
     <link rel="stylesheet" href="ln_report.css?v=1">
 </head>
 <body>
     <div class="top-row">
-        <h2>Lmr Клиенты </h2>
+        <h2>LN Клиенты </h2>
         <button id="fetchClientsBtn" class="get-btn" type="button">Получить данные клиентов</button>
         <a href="budgets.php" id="budgetsBtn" class="get-btn btn-progressable" class="get-btn">Работа с бюджетами</a>
         <a href="ln_ending_campaigns.php" class="get-btn btn-progressable" class="get-btn">Завершающиеся кампании</a>
-        <a href="/lmr/" class="get-btn btn-progressable" class="get-btn">На главную</a>
-        <a href="/lmr/to_stop_campaigns.html" class="get-btn btn-progressable" class="get-btn">Логи проверки</a>
-        <a href="utm_litnet.html" class="get-btn btn-progressable" class="get-btn">Рокет Ссылка</a>
+        <a href="index.php" class="get-btn btn-progressable" class="get-btn">На главную</a>
+        <a href="to_stop_campaigns.html" class="get-btn btn-progressable" class="get-btn">Логи проверки</a>
         <form method="post" class="add-form" id="add-client-form" autocomplete="off" style="position:relative;">
             <span id="show-add" class="get-btn" style="cursor:pointer;  font-weight:bold;">Добавить клиента</span>
             <span id="add-fields" style="display:none;">
@@ -99,7 +98,7 @@ $edit_client = $_GET['edit'] ?? null;
     </ul>
     <br>
     <div id="clientsDataContainer"></div>
-    <a href="/lmr/" class="client-link" style="display: inline-block;margin-top: 10px;">Назад</a>
+    <a href="index.php" class="client-link" style="display: inline-block;margin-top: 10px;">на главную</a>
     <script src="ln_report.js"></script>
 </body>
 </html>

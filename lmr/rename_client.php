@@ -1,6 +1,5 @@
 <?php
-require_once 'auth_check.php'; // Проверка авторизации
-
+// rename_client.php
 header('Content-Type: application/json');
 
 $names_file = __DIR__ . "/clients_ln_names.json";

@@ -7,36 +7,7 @@ require_once "auth_check.php";
     - Вся логика сбора/обновления вынесена в функцию process_ending_campaigns()
 */
 
-// --- Функция логирования изменений в ln_stop_by_budgets.json ---
-function log_stop_by_budgets($added, $removed, $all, $ending_campaigns) {
-    $log_file = __DIR__ . "/ln_stop_by_budgets.log";
-    $now = date('Y-m-d H:i:s');
-    $lines = [];
-    $lines[] = "[$now] Проверка кампаний:";
-    if ($added) {
-        $lines[] = "  Добавлены:";
-        foreach ($added as $cid) {
-            $item = null;
-            foreach ($ending_campaigns as $row) {
-                if ($row['cid'] == $cid) { $item = $row; break; }
-            }
-            if ($item) {
-                $lines[] = "    + {$cid} ({$item['login']}, {$item['name']}, \"{$item['camp_name']}\", осталось дней: {$item['days_left']})";
-            } else {
-                $lines[] = "    + {$cid}";
-            }
-        }
-    }
-    if ($removed) {
-        $lines[] = "  Удалены:";
-        foreach ($removed as $cid) {
-            $lines[] = "    - $cid";
-        }
-    }
-    $lines[] = "  Текущее количество: ".count($all);
-    $lines[] = str_repeat("-", 40);
-    file_put_contents($log_file, implode("\n", $lines)."\n", FILE_APPEND);
-}
+// ======== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ========
 function get_active_campaigns_ids($access_token, $client_login) {
     $url = 'https://api.direct.yandex.com/json/v5/campaigns';
     $headers = [
@@ -125,6 +96,7 @@ function get_campaigns_daily_spend($access_token, $client_login, $ids) {
     }
     return $day_spent;
 }
+
 function get_campaigns_details_by_ids($access_token, $client_login, $ids) {
     if (empty($ids)) return [];
     $url = 'https://api.direct.yandex.com/json/v5/campaigns';
@@ -166,10 +138,13 @@ function state_icon($state) {
         return '<span style="color:gray;font-size:1.2em;" title="Архив/Снята">&#9679;</span>';
     }
 }
-// --- Вся бизнес-логика в одной функции! ---
+
+// ======== ГЛАВНАЯ ЛОГИКА ========
 function process_ending_campaigns() {
-    $access_token = $_SESSION['ya_access_token'] ?? null;
-    if (!$access_token) die("Нет access_token в сессии!");
+    $token_file = __DIR__ . '/../ya_access_token.txt';
+    if (!file_exists($token_file)) die("Нет файла токена!");
+    $access_token = trim(file_get_contents($token_file));
+    if (!$access_token) die("Пустой токен!");
     $clients_file = __DIR__ . "/clients_ln_active.json";
     if (!file_exists($clients_file)) die("Нет файла clients_ln_active.json!");
     $clients = json_decode(file_get_contents($clients_file), true);
@@ -182,18 +157,16 @@ function process_ending_campaigns() {
     if (!file_exists($manual_week_file)) file_put_contents($manual_week_file, "{}");
     $manual_week_limits = json_decode(file_get_contents($manual_week_file), true);
 
-    $stop_file = __DIR__ . "/ln_stop_by_budgets.json";
+    // === ВАЖНО: единый файл для всего проекта (корень lmr) ===
+    $stop_file = dirname(__DIR__) . "/ln_stop_by_budgets.json";
     if (!file_exists($stop_file)) file_put_contents($stop_file, "[]");
     $stop_by_budgets = json_decode(file_get_contents($stop_file), true);
     if (!is_array($stop_by_budgets)) $stop_by_budgets = [];
 
-    // --- Сохраняем старый массив до изменений для логирования ---
-    $prev_stop_by_budgets = $stop_by_budgets;
-
     $ending_campaigns = [];
     $changed = false;
 
-    // Для сбора id => login для campaign_logins.json
+    // Для сбора id => login для campaign_logins.json (остается локально!)
     $new_campaign_logins = [];
 
     foreach ($clients as $client) {
@@ -263,7 +236,7 @@ function process_ending_campaigns() {
                 $days_left = '-';
             }
 
-            // --- Обновляем массив ID в ln_stop_by_budgets.json ---
+            // --- Обновляем массив ID в ln_stop_by_budgets.json (корень lmr) ---
             if ($days_left !== '-') {
                 if ($days_left <= 2 && !in_array($cid, $stop_by_budgets)) {
                     $stop_by_budgets[] = $cid;
@@ -297,23 +270,18 @@ function process_ending_campaigns() {
         }
     }
 
-    // --- Если были изменения, сохраняем ln_stop_by_budgets.json и логируем! ---
+    // --- Если были изменения, сохраняем ln_stop_by_budgets.json (корень lmr) ---
     if ($changed) {
-        file_put_contents(__DIR__ . "/ln_stop_by_budgets.json", json_encode(array_values($stop_by_budgets), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        // сравниваем до и после
-        $added = array_diff($stop_by_budgets, $prev_stop_by_budgets);
-        $removed = array_diff($prev_stop_by_budgets, $stop_by_budgets);
-        log_stop_by_budgets($added, $removed, $stop_by_budgets, $ending_campaigns);
+        file_put_contents(dirname(__DIR__) . "/ln_stop_by_budgets.json", json_encode(array_values($stop_by_budgets), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
     }
 
-    // --- Обновляем campaign_logins.json (дополняем, не затираем!) ---
-    $campaign_logins_file = __DIR__ . "/campaign_logins.json";
+    // --- Обновляем campaign_logins.json (локально в своей папке) ---
+    //$campaign_logins_file = __DIR__ . "/campaign_logins.json";
+    // campaign_logins.json — всегда в папке lmr!
+    $campaign_logins_file = dirname(__DIR__) . "/campaign_logins.json";
     $campaign_logins = file_exists($campaign_logins_file) ? json_decode(file_get_contents($campaign_logins_file), true) : [];
     if (!is_array($campaign_logins)) $campaign_logins = [];
-
-    // Объединяем с сохранением ключей (ID кампаний), старые данные не перезаписываются
     $campaign_logins = $new_campaign_logins + $campaign_logins;
-
     file_put_contents($campaign_logins_file, json_encode($campaign_logins, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
     return [
@@ -322,6 +290,7 @@ function process_ending_campaigns() {
         'stop_by_budgets' => $stop_by_budgets
     ];
 }
+
 // --- Определяем режим ---
 $is_cron = (php_sapi_name() === 'cli') || (isset($_GET['cron']) && $_GET['cron'] == 1);
 
